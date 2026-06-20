@@ -117,6 +117,8 @@ RE_ELEM = re.compile(r"([火水風光闇])属性(攻撃力|防御力)")
 RE_ET = re.compile(r"次の回復時に回復効果が[0-9.]+%アップするスタック")  # Et: 自身下次回复量↑
 RE_MAXHP = re.compile(r"最大HP[^。]*アップ")
 RE_SELFHEAL = re.compile(r"自身のHP[^。]*回復")   # 012: 造成伤害同时回复自身HP
+# 同句内 HP…回復（含 大/特大 回復；不会匹配 MP回復）。前衛=自身回复 / 後衛=味方回复
+RE_HP_HEAL = re.compile(r"HP[^。]*?回復")
 
 
 def target_icon(desc):
@@ -214,6 +216,28 @@ def gvg_battle_icons(gvg_skill, fg):
     return target_icon(desc), paths(stat), paths(special), paths(mark)
 
 
+def stat_change_set(gvg_skill):
+    """卡片数值变动涉及的「单项」图标编号集合（不做组合、不含最大HP）。
+    主属性 4 种各上/下 -> 1-8；五属性攻防各上/下 -> 18-37；共 28 个可能值。
+    一张卡可同时命中多项。"""
+    desc = (gvg_skill.get("desc", "") if gvg_skill else "") or ""
+    nums = set()
+    flags = stat_flags(desc)
+    for s in MAIN_ORDER:                 # pa pd ma md
+        if s + "+" in flags:
+            nums.add(MAIN_UP[s])
+        if s + "-" in flags:
+            nums.add(MAIN_DN[s])
+    for m in RE_ELEM.finditer(desc):     # 火水風光闇 × 攻/防
+        el = ELEM_CHAR[m.group(1)]
+        atk = (m.group(2) == "攻撃力")
+        d = _dir_after(desc, m.start())
+        if d is None:
+            continue
+        nums.add(ELEM_BASE[el] + (0 if atk else 2) + (0 if d == "+" else 1))
+    return nums
+
+
 # ---------------------------------------------------------------------------
 # twdb（allb.game-db.tw）卡片编号
 # ---------------------------------------------------------------------------
@@ -231,6 +255,21 @@ def tw_full_id(e):
 
 
 # ---------------------------------------------------------------------------
+# 右上角被动小圆（仅组卡器）
+# ---------------------------------------------------------------------------
+def passive_dot(e):
+    """根据被动技能（GvgAuto 名）返回右上角小圆的颜色（无则空字符串）。
+    効果範囲+1 → #e377c2（品红）；副援:支援UP → #f6c2dd（很浅的粉色）；都不是 → 不加圆。"""
+    ga = e["skills"].get("gvgAuto")
+    name = (ga.get("name", "") if ga else "") or ""
+    if "効果範囲+1" in name:
+        return "#e377c2"
+    if "副援:支援UP" in name:
+        return "#f6c2dd"
+    return ""
+
+
+# ---------------------------------------------------------------------------
 # 构建选卡单元
 # ---------------------------------------------------------------------------
 def build_units(entries):
@@ -239,6 +278,7 @@ def build_units(entries):
         gvg = e["skills"].get("gvg")
         ga = e["skills"].get("gvgAuto")
         tgt, sk1, sk2, sk3 = gvg_battle_icons(gvg, e["fg"])
+        gdesc = (gvg.get("desc", "") if gvg else "") or ""
         units.append({
             "uid": e["uniqueId"],
             "tw": tw_full_id(e),
@@ -261,7 +301,10 @@ def build_units(entries):
             "ga_skill": ga,
             "legendary": e["skills"].get("legendary"),
             "mark": card_markers.marker_for(e, "deck"),
+            "pdot": passive_dot(e),
             "tgt": tgt, "sk1": sk1, "sk2": sk2, "sk3": sk3,
+            "sc": sorted(stat_change_set(gvg)),       # 单项数值变动图标编号
+            "heal": 1 if RE_HP_HEAL.search(gdesc) else 0,
         })
     return units
 
@@ -278,6 +321,11 @@ def render_mini_skill(sk, icon):
         '<div class="u-sdesc">{desc}</div>'
         "</div>"
     ).format(icon=icon, name=fmt(sk["name"]), desc=fmt(sk["desc"]))
+
+
+def pdot_html(color):
+    """右上角被动小圆（圆心=卡图右上顶点，可略微溢出卡框）。"""
+    return ('<span class="pdot" style="background:%s"></span>' % color) if color else ""
 
 
 def render_overlay(tgt, sk1, sk2, sk3):
@@ -303,12 +351,13 @@ def render_unit(u):
         'data-grade="{grade}" data-leg="{leg}" data-ult="{ult}" data-order="{order}" '
         'data-name="{name_attr}" data-tg="{tg}" data-fg="{fg}" data-ga="{ga_codes}" '
         'data-mt="{mt}" data-an="{an}" data-ba="{ba}" data-et="{et}" data-lv="{lv}" '
-        'data-mark="{mark}" data-frame="{frame}" data-tgt="{tgt}" '
-        'data-sk1="{sk1}" data-sk2="{sk2}" data-sk3="{sk3}">'
+        'data-mark="{mark}" data-frame="{frame}" data-pdot="{pdot_color}" data-tgt="{tgt}" '
+        'data-sk1="{sk1}" data-sk2="{sk2}" data-sk3="{sk3}" data-sc="{sc}" data-heal="{heal}">'
         '<div class="u-top">'
         '<span class="cardimg" title="{name_attr}">'
         '<img class="art" loading="lazy" src="{icon}" alt="" onerror="this.classList.add(\'broken\')">'
         '<img class="frame" src="{frame}" alt="">'
+        '{pdot}'
         '<img class="mark" src="{mark}" alt="">'
         '{overlay}'
         '</span>'
@@ -327,7 +376,9 @@ def render_unit(u):
         tg=u["tg"], fg=" ".join(u["fg"]), ga_codes=" ".join(u["ga_codes"]),
         mt=u["mt"], an=u["an"], ba=u["ba"], et=u["et"], lv=" ".join(u["lv"]),
         mark=u["mark"], frame=card_markers.frame_rel(u["ult"]),
+        pdot=pdot_html(u["pdot"]), pdot_color=u["pdot"],
         tgt=u["tgt"], sk1=" ".join(u["sk1"]), sk2=" ".join(u["sk2"]), sk3=" ".join(u["sk3"]),
+        sc=" ".join(str(n) for n in u["sc"]), heal=u["heal"],
         overlay=render_overlay(u["tgt"], u["sk1"], u["sk2"], u["sk3"]),
         icon=icon,
         gvg_cell=render_mini_skill(u["gvg"], "assets/Skill2.png"),
@@ -351,7 +402,7 @@ def render_html(units):
     dropdowns = {
         "__DD_TYPE__": build_dropdown("type", "類別", sorted(CARD_TYPE_LABEL.items())),
         "__DD_ATTR__": build_dropdown("attr", "属性", sorted(ATTRIBUTE_LABEL.items())),
-        "__DD_TARGET__": build_dropdown("target", "目標数", [(t, t) for t in targets]),
+        "__DD_TARGET__": build_dropdown("target", "タゲ数", [(t, t) for t in targets]),
         "__DD_FEAT__": build_dropdown("feat", "技能特性", FEATURE_DEFS),
         "__DD_GA__": build_dropdown("ga", "補助特性", GA_DEFS),
     }
@@ -417,16 +468,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .deck-group h3 { font-size:14px; margin:0 0 6px; color:#333; border-bottom:1px solid #c5ccda; padding-bottom:3px; }
   .slots { display:grid; grid-template-columns:repeat(5, 88px); gap:6px; justify-content:start; }
   .slot { position:relative; width:88px; height:88px; border:1px solid #b7bdcc; border-radius:6px;
-          background:#fff; overflow:hidden; }
+          background:#fff; overflow:visible; }   /* visible: 让被动小圆能出框显示 */
   .slot.empty { background:#fff; }
-  .slot.empty .blank { width:100%; height:100%; object-fit:cover; display:block; }
+  .slot.empty .blank { width:100%; height:100%; object-fit:cover; display:block; border-radius:6px; }
   .slot.filled { cursor:grab; }
   .slot.filled:active { cursor:grabbing; }
   .slot.dragover { outline:2px solid #5b6b8c; outline-offset:-2px; }
   .slot.dragging { opacity:.35; }
   .slot .cardimg { width:100%; height:100%; }
-  .slot .x { position:absolute; top:0; right:0; z-index:2; background:rgba(180,0,0,.85); color:#fff; font-size:11px;
-             line-height:1; padding:2px 4px; border-bottom-left-radius:6px; opacity:0; cursor:pointer; }
+  .slot .x { position:absolute; top:0; right:0; z-index:2; background:rgba(180,0,0,.85); color:#fff;
+             font-size:16px; font-weight:700; line-height:1; padding:5px 10px;
+             border-bottom-left-radius:8px; border-top-right-radius:6px;
+             opacity:0; cursor:pointer; }
   .slot:hover .x { opacity:1; }
   .empty-hint { color:#999; align-self:center; }
 
@@ -439,7 +492,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cardimg .mark { position:absolute; top:-2px; right:-3px; max-height:38%;
                    height:auto; width:auto; pointer-events:none;
                    filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
-  .slot .cardimg .mark { top:1px; right:1px; }   /* 格子内不溢出 */
+  .slot .cardimg .mark { top:1px; right:1px; }   /* 类别角标在格子内不溢出 */
+  /* 被动小圆：圆心=卡图右上顶点，略微溢出卡框；放到最顶层完整显示（小圆很小，不会挡住其他元素）*/
+  .cardimg .pdot { position:absolute; top:-7px; right:-7px; width:14px; height:14px; z-index:10;
+                   border-radius:50%; border:2px solid #fff; box-sizing:border-box;
+                   box-shadow:0 1px 2px rgba(0,0,0,.55); pointer-events:none; }
   /* 左上：目标数（与角标同高 38%）；数值=右下横排；特效=右侧居中竖列；标记=左侧居中竖列 */
   .cardimg .tgt { position:absolute; left:-2px; top:-2px; max-height:38%; height:auto; width:auto;
                   pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,.45)); }
@@ -462,6 +519,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .chip img { width:22px; height:22px; object-fit:contain; }
   .chip b { font-variant-numeric:tabular-nums; }
   .chip.zero { opacity:.4; }
+  .chip .scicon { width:20px; height:20px; object-fit:contain; vertical-align:middle; }
+  .sclbl { font-size:12px; color:#666; margin:5px 0 2px; }
+  .skcls { display:flex; flex-wrap:wrap; gap:5px 8px; }
+  .skcls .muted { color:#999; font-size:12px; }
   .statline { line-height:1.9; }
   .statline .k { display:inline-block; min-width:38px; font-weight:600; }
   .lvtbl { border-collapse:collapse; margin:3px 0 8px; }
@@ -533,10 +594,14 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <h3>類別</h3><div id="stType" class="chips"></div>
       <h3>属性</h3><div id="stAttr" class="chips"></div>
       <h3>目標数</h3><div id="stTarget" class="chips"></div>
-      <h3>スタック (枚数 / 総マーク数)</h3><div id="stStack" class="statline"></div>
+      <h3>数値変動（単項）</h3>
+      <div class="sclbl">増加</div><div id="stScUp" class="chips sc"></div>
+      <div class="sclbl">減少</div><div id="stScDn" class="chips sc"></div>
+      <h3>スキル分類（buff変動別）</h3><div id="stSkillCls" class="skcls"></div>
+      <h3>スタック (枚数 / 総スタック数)</h3><div id="stStack" class="statline"></div>
       <h3>特性</h3><div id="stFeat" class="statline"></div>
-      <h3>補助技能 (枚数)</h3><div id="stGa" class="statline"></div>
-      <h3>補助技能レベル別</h3><div id="stLevels"></div>
+      <h3>補助スキル (枚数)</h3><div id="stGa" class="statline"></div>
+      <h3>補助スキルレベル別</h3><div id="stLevels"></div>
     </div>
   </aside>
 
@@ -563,6 +628,16 @@ __OTH_UNITS__
   var GA_LABEL = {dmgup:'ダメージUP',supup:'支援UP',healup:'回復UP',ptup:'獲得マッチPtUP',rangeup:'効果範囲+1'};
   var ROMAN = {'Ⅰ':1,'Ⅱ':2,'Ⅲ':3,'Ⅳ':4,'Ⅴ':5,'Ⅵ':6,'Ⅶ':7,'Ⅷ':8,'Ⅸ':9,'Ⅹ':10};
 
+  // 数値変動（単項）：14 种 × 上/下 = 28 项。图标 = BattleIconSkillImg{n}
+  var SC_UP=[1,2,3,4,18,20,22,24,26,28,30,32,34,36];
+  var SC_DN=[5,6,7,8,19,21,23,25,27,29,31,33,35,37];
+  var SC_NAME={1:'ATK↑',2:'DEF↑',3:'Sp.ATK↑',4:'Sp.DEF↑',5:'ATK↓',6:'DEF↓',7:'Sp.ATK↓',8:'Sp.DEF↓',
+    18:'火攻↑',19:'火攻↓',20:'火防↑',21:'火防↓',22:'水攻↑',23:'水攻↓',24:'水防↑',25:'水防↓',
+    26:'風攻↑',27:'風攻↓',28:'風防↑',29:'風防↓',30:'光攻↑',31:'光攻↓',32:'光防↑',33:'光防↓',
+    34:'闇攻↑',35:'闇攻↓',36:'闇防↑',37:'闇防↓'};
+  function scIcon(n){ return 'assets/Sprite/BattleIconSkillImg'+('00'+n).slice(-3)+'.png'; }
+  function healIcon(){ return role==='F' ? scIcon(12) : 'assets/CardType7.png'; }
+
   function setHeadOffset(){ document.documentElement.style.setProperty('--toolbar-h', header.offsetHeight+'px'); }
   window.addEventListener('resize', setHeadOffset); setHeadOffset();
 
@@ -571,8 +646,9 @@ __OTH_UNITS__
   function parseUnit(el){
     var d = el.dataset;
     return { uid:d.uid, tw:+d.tw, ct:+d.ct, attr:+d.attr, grade:+d.grade, leg:d.leg==='1',
-             name:d.name, tg:d.tg||'', mark:d.mark, frame:d.frame,
+             name:d.name, tg:d.tg||'', mark:d.mark, frame:d.frame, pdot:d.pdot||'',
              tgt:d.tgt||'', sk1:d.sk1?d.sk1.split(' '):[], sk2:d.sk2?d.sk2.split(' '):[], sk3:d.sk3?d.sk3.split(' '):[],
+             sc:d.sc?d.sc.split(' ').map(Number):[], heal:d.heal==='1',
              fg:d.fg?d.fg.split(' '):[], ga:d.ga?d.ga.split(' '):[],
              mt:+d.mt, an:+d.an, ba:+d.ba, et:+d.et, lv:d.lv?d.lv.split(' '):[], el:el };
   }
@@ -735,6 +811,7 @@ __OTH_UNITS__
           +'<span class="cardimg">'
           +'<img class="art" loading="lazy" src="'+iconUrl(c.uid)+'" alt="" onerror="this.style.visibility=\\'hidden\\'">'
           +'<img class="frame" src="'+c.frame+'" alt="">'
+          +(c.pdot?'<span class="pdot" style="background:'+c.pdot+'"></span>':'')
           +'<img class="mark" src="'+c.mark+'" alt="">'
           +overlayHtml(c)
           +'</span>'
@@ -840,9 +917,35 @@ __OTH_UNITS__
     document.getElementById('stTarget').innerHTML = tks.length ? tks.map(function(t){
       return '<span class="chip"><b>'+t+'</b> '+byTarget[t]+'</span>';
     }).join('') : '<span class="empty-hint">—</span>';
+
+    // 数値変動（単項）：每个图标统计命中卡数（一张卡可命中多项）
+    var scCount={};
+    list.forEach(function(c){ c.sc.forEach(function(n){ scCount[n]=(scCount[n]||0)+1; }); });
+    function scChips(arr){ return arr.map(function(n){ var v=scCount[n]||0;
+      return '<span class="chip'+(v?'':' zero')+'" title="'+SC_NAME[n]+'">'
+        +'<img class="scicon" src="'+scIcon(n)+'" alt=""> <b>'+v+'</b></span>'; }).join(''); }
+    document.getElementById('stScUp').innerHTML = scChips(SC_UP);
+    document.getElementById('stScDn').innerHTML = scChips(SC_DN);
+
+    // スキル分類：buff 变动完全一致（+ 是否含HP回复）归为一类，每卡仅属一类
+    var groups={};
+    list.forEach(function(c){
+      var sig=c.sk1.join(' ')+(c.heal?'|H':'');
+      if(!groups[sig]) groups[sig]={sk1:c.sk1, heal:c.heal, n:0};
+      groups[sig].n++;
+    });
+    var garr=Object.keys(groups).map(function(k){ return groups[k]; })
+      .sort(function(a,b){ return b.n-a.n || a.sk1.length-b.sk1.length; });
+    document.getElementById('stSkillCls').innerHTML = garr.length ? garr.map(function(g){
+      var ic=g.sk1.map(function(p){ return '<img class="scicon" src="'+p+'" alt="">'; }).join('');
+      if(g.heal) ic+='<img class="scicon" src="'+healIcon()+'" alt="" title="HP回復">';
+      if(!ic) ic='<span class="muted">変動なし</span>';
+      return '<span class="chip">'+ic+' <b>'+g.n+'</b></span>';
+    }).join('') : '<span class="empty-hint">—</span>';
+
     // スタック Mt/An/Ba
     document.getElementById('stStack').innerHTML = ['Mt','An','Ba','Et'].map(function(k){
-      return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' 枚 / <b>'+marks[k]+'</b> マーク</div>';
+      return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' 枚 / <b>'+marks[k]+'</b> スタック</div>';
     }).join('');
     // EH/SD/MN/CT
     document.getElementById('stFeat').innerHTML = ['EH','SD','MN','CT'].map(function(k){

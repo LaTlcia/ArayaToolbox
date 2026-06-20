@@ -564,7 +564,7 @@ def render_html(entries):
         "__DD_TYPE__": build_dropdown("type", "類別", sorted(CARD_TYPE_LABEL.items())),
         "__DD_GRADE__": build_dropdown("grade", "等級", sorted(GRADE_LABEL.items())),
         "__DD_COST__": build_dropdown("cost", "Cost", [(c, c) for c in costs]),
-        "__DD_TARGET__": build_dropdown("target", "目標数", [(t, t) for t in targets]),
+        "__DD_TARGET__": build_dropdown("target", "タゲ数", [(t, t) for t in targets]),
         "__DD_FEAT__": build_dropdown("feat", "技能特性", FEATURE_DEFS),
         "__DD_GA__": build_dropdown("ga", "補助特性", GA_DEFS),
     }
