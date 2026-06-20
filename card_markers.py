@@ -1,19 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-卡牌角标 / 边框 合成（共用于列表与组卡器）
-==========================================
-把 assets/Sprite/ 下的素材合成为「右上角类别角标」PNG，写到 assets/markers/。
-卡图本体是远程图，边框(IconRarity) 与角标(marker) 在 HTML 里叠放在卡图之上。
+Card corner marker / frame compositing (shared by the list and the deck builder)
+================================================================================
+Composite the sprites under assets/Sprite/ into "top-right category marker" PNGs,
+written to assets/markers/. The card art itself is a (now local) image; the frame
+(IconRarity) and the marker are layered over the card art in the HTML.
 
-角标规则：
-  * 底框颜色按 attribute：IconType{001..005}L...  （1火2水3風4光5闇）
-  * 不可觉醒：IconType{a}LImage.png(75x75) 中心贴 CardIcon{ct}LImage.png(60x60)
-  * 觉醒：IconType{a}LImageAwakening.png(129x76)
-        右(大圈,center 91,38,直径74) 贴 CardIcon{原始ct}(60x60)
-        左(小圈,center 32,32,直径63) 贴 CardIcon{觉醒新增ct} 按圆比例缩放到 51x51
-        组卡器中按条目只贴其一（base=只大圈 / add=只小圈）
-  * 超觉醒：IconType{a}LImageSuperAwakening001.png(90x90) 中心贴 CardIcon{ct}(60x60)
-边框：Ultimate(gradeType==2) 用 IconRarity08L，其余用 IconRarity06L（整张覆盖卡图）。
+Marker rules:
+  * Base ring color follows attribute: IconType{001..005}L...  (1=fire 2=water 3=wind 4=light 5=dark)
+  * Non-awakening: IconType{a}LImage.png(75x75) with CardIcon{ct}LImage.png(60x60) centered
+  * Awakening: IconType{a}LImageAwakening.png(129x76)
+        right (big circle, center 91,38, diameter 74) <- CardIcon{original ct}(60x60)
+        left  (small circle, center 32,32, diameter 63) <- CardIcon{awakening-added ct} scaled to 51x51
+        in the deck builder only one is drawn per entry (base = big circle only / add = small circle only)
+  * Super-awakening: IconType{a}LImageSuperAwakening001.png(90x90) with CardIcon{ct}(60x60) centered
+Frame: Ultimate (gradeType==2) uses IconRarity08L, otherwise IconRarity06L (covers the whole card).
 """
 
 import os
@@ -24,14 +25,14 @@ SPRITE_DIR = os.path.join(SCRIPT_DIR, "assets", "Sprite")
 MARKER_DIR = os.path.join(SCRIPT_DIR, "assets", "markers")
 MARKER_REL = "assets/markers"
 
-# 合成位置（中心坐标）/ 尺寸（实测自素材）
-PLAIN_C = (37, 37)       # 75x75 单圈
-SUPER_C = (45, 45)       # 90x90 单菱形
-AWK_BIG = (91, 38)       # 129x76 右·大圈(直径74) -> 原始类别 CardIcon 60x60
-AWK_SMALL = (32, 32)     # 129x76 左·小圈(直径63) -> 觉醒新增类别 CardIcon 按比例缩放
-AWK_SMALL_SIZE = 51      # 60 * 63/74 ≈ 51，使小圈图标占比与大圈一致
+# Composite positions (center coords) / sizes (measured from the sprites)
+PLAIN_C = (37, 37)       # 75x75 single circle
+SUPER_C = (45, 45)       # 90x90 single diamond
+AWK_BIG = (91, 38)       # 129x76 right big circle (diameter 74) -> original category CardIcon 60x60
+AWK_SMALL = (32, 32)     # 129x76 left small circle (diameter 63) -> awakening-added category CardIcon, scaled
+AWK_SMALL_SIZE = 51      # 60 * 63/74 ~= 51, so the small-circle icon ratio matches the big one
 
-_disk_cache = {}       # fname -> rel path（本次运行已写盘）
+_disk_cache = {}       # fname -> rel path (already written this run)
 _img_cache = {}
 
 
@@ -77,7 +78,7 @@ def marker_super(attr, ctype):
 
 
 def marker_awakening(attr, base_type, add_type, mode):
-    """mode: 'full'(两圈) / 'base'(只大圈) / 'add'(只小圈)。"""
+    """mode: 'full' (both circles) / 'base' (big circle only) / 'add' (small circle only)."""
     def b():
         base = _img("IconType%03dLImageAwakening.png" % attr)
         if mode in ("full", "base"):
@@ -95,7 +96,8 @@ def marker_awakening(attr, base_type, add_type, mode):
 
 
 def marker_for(entry, context):
-    """根据条目返回角标相对路径。context: 'list'(觉醒两圈都贴) / 'deck'(按条目只贴一圈)。"""
+    """Return the marker's relative path for an entry. context: 'list' (awakening draws
+    both circles) / 'deck' (one circle per entry)."""
     attr = entry["attribute"]
     ct = entry["cardType"]
     awk = entry.get("awk", "none")
@@ -105,7 +107,8 @@ def marker_for(entry, context):
         bt, at = entry["baseType"], entry["addType"]
         if context == "list":
             return marker_awakening(attr, bt, at, "full")
-        # 组卡器：觉醒卡两个条目都用与普通卡一致的单圆角标，分别贴各自类别
+        # Deck builder: both awakening entries use the same single-circle marker as a
+        # normal card, each showing its own category.
         return marker_none(attr, bt if entry.get("role") == "base" else at)
     return marker_none(attr, ct)
 

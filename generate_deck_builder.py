@@ -1,24 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-组卡器（卡组编辑器）生成脚本
-============================
-根据 A.RA.YA/MasterdataBase/ 中的游戏 masterdata 生成一个 HTML 卡组编辑器。
-复用 generate_card_list.py 的数据层（build_lookups / build_entries），不改动其文件。
+Deck builder generator
+======================
+Build an HTML deck builder from the game masterdata in A.RA.YA/MasterdataBase/.
+Reuses the data layer from generate_card_list.py (build_lookups / build_entries)
+without modifying that file.
 
-运行方式（在 localdb conda 环境下）：
+How to run (in the localdb conda env):
     conda run -n localdb python localDB/generate_deck_builder.py
-然后用浏览器打开生成的 localDB/deck_builder.html。
-（也可运行 build_all.py 一键更新列表 + 组卡器两个 HTML。）
+Then open the generated localDB/deck_builder.html in a browser.
+(You can also run build_all.py to refresh both the list and the deck builder.)
 
-规则要点：
-  * 一套卡组 = 最多 5 张 Legendary 卡（gradeType==1）+ 最多 20 张其他卡；每个 uniqueId 只能 1 张。
-  * 卡组分前衛 / 後衛：前衛只允许 Type 1-4，後衛只允许 Type 5-7（开关切换）。
-  * 选卡列表只展示 图 / GvgSkill / GvgAutoSkill；Legendary 与其他卡分两列表，均按更新顺序（新→旧），
-    其他卡中 Ultimate（gradeType==2）排在普通卡之前。
-  * 统计：類別 / 属性 数量；Mt/An/Ba（卡数 + 总标记数）/EH/SD/MN/CT 数量；五种被动技能数量；
-    四种被动技能（除 効果範囲+1）的逐等级数量。「副」级别 = 罗马数字 -1（保留「+」）。
-  * 卡组唯一字符串：前/后卫 + 排序后的 (uniqueId.cardType) 列表，base64 编码；可一键还原。
-所有文字保留日文原文，不做翻译。
+Key rules:
+  * A deck = up to 5 Legendary cards (gradeType==1) + up to 20 other cards; one copy per uniqueId.
+  * Decks split into 前衛 / 後衛: 前衛 allows Type 1-4, 後衛 allows Type 5-7 (toggle).
+  * The picker only shows art / GvgSkill / GvgAutoSkill; Legendary and other cards are listed
+    separately, both by update order (new -> old); among the others, Ultimate (gradeType==2)
+    comes before normal cards.
+  * Stats: counts by category / attribute; Mt/An/Ba (card count + total marks) / EH/SD/MN/CT;
+    counts of the five passives; per-level counts of the four leveled passives (excluding 効果範囲+1);
+    plus per-stat change counts and a buff-combination breakdown. ("副" level = roman numeral - 1, keeping "+".)
+  * Deck code: an allb.game-db.tw deck-builder URL (see deckCode/loadCode); one-click restore.
+All displayed text is kept in the original Japanese (not translated).
 """
 
 import os
@@ -36,20 +39,20 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(SCRIPT_DIR, "deck_builder.html")
 
 # ---------------------------------------------------------------------------
-# 被动技能（GvgAuto）等级 / 标记解析
+# Passive (GvgAuto) level / mark parsing
 # ---------------------------------------------------------------------------
 ROMAN_VAL = {"Ⅰ": 1, "Ⅱ": 2, "Ⅲ": 3, "Ⅳ": 4, "Ⅴ": 5,
              "Ⅵ": 6, "Ⅶ": 7, "Ⅷ": 8, "Ⅸ": 9, "Ⅹ": 10}
 VAL_ROMAN = {v: k for k, v in ROMAN_VAL.items()}
-RE_LV = re.compile(r"([Ⅰ-Ⅹ])(\++)?\s*$")   # 末尾罗马数字 + 任意个「+」(Ⅴ+/Ⅴ++ …)
+RE_LV = re.compile(r"([Ⅰ-Ⅹ])(\++)?\s*$")   # trailing roman numeral + any number of "+" (e.g. Ⅴ+/Ⅴ++)
 
-# 四种有等级的被动（按名称识别）；効果範囲+1 无等级，单独计数
+# The four leveled passives (identified by name); 効果範囲+1 has no level, counted separately
 PASSIVE_KEYS = [
     ("dmgup", "ダメージUP"), ("supup", "支援UP"),
     ("healup", "回復UP"), ("ptup", "獲得マッチPtUP"),
 ]
 
-# Gvg 技能里 Mt/An/Ba 标记短语 + 蓄積回数
+# Mt/An/Ba mark phrases + stack counts in a Gvg skill
 RE_MT = re.compile(r"次の攻撃時にダメージが[0-9.]+%アップするスタック")
 RE_AN = re.compile(r"次の支援/妨害時に支援/妨害効果が[0-9.]+%アップするスタック")
 RE_BA = re.compile(r"次の被ダメージ時に被ダメージを[0-9.]+%ダウンさせるスタック")
@@ -57,13 +60,13 @@ RE_KAI = re.compile(r"(\d+)回蓄積")
 
 
 def lv_label(value, plus):
-    """等级数值 + 「+」标记 -> 显示标签（如 5,'+' -> 'Ⅴ+'；0 -> '0'）。"""
+    """Level value + "+" marker -> display label (e.g. 5,'+' -> 'Ⅴ+'; 0 -> '0')."""
     roman = VAL_ROMAN.get(value, str(value)) if value >= 1 else "0"
     return roman + plus
 
 
 def passive_levels(ga_skill):
-    """从 GvgAuto 技能名解析四种被动的 (code, 等级标签)。「副」段落等级 = 罗马数字 -1（保留 +）。"""
+    """Parse the four passives' (code, level label) from a GvgAuto skill name. A "副" segment's level = roman numeral - 1 (keeping +)."""
     if not ga_skill:
         return []
     name = ga_skill.get("name", "") or ""
@@ -83,7 +86,7 @@ def passive_levels(ga_skill):
 
 
 def stack_count(gvg_skill, phrase_re):
-    """某类标记（Mt/An/Ba）的总蓄積回数：每个标记短语后最近的「N回蓄積」。"""
+    """Total stack count for a mark type (Mt/An/Ba): the nearest 「N回蓄積」 after each mark phrase."""
     if not gvg_skill:
         return 0
     desc = gvg_skill.get("desc", "") or ""
@@ -95,34 +98,34 @@ def stack_count(gvg_skill, phrase_re):
 
 
 # ---------------------------------------------------------------------------
-# GvgSkill -> 战斗图标（目标数 / 数值变动 / 特效 / 标记），仅用于卡组编辑器
+# GvgSkill -> battle icons (target count / stat changes / special effects / marks), deck builder only
 # ---------------------------------------------------------------------------
 SKILL_ICON = "assets/Sprite/BattleIconSkillImg%03d.png"
 TGT_ICON = "assets/Sprite/BattleIconTargetNumberImg%03d%03d.png"  # (max, min)
 
-# 四主属性（攻防/特攻防）单图标：上/下
+# Four main stats (phys atk/def, mag atk/def) single icons: up/down
 MAIN_UP = {"pa": 1, "pd": 2, "ma": 3, "md": 4}
 MAIN_DN = {"pa": 5, "pd": 6, "ma": 7, "md": 8}
-MAIN_ORDER = ["pa", "pd", "ma", "md"]   # 普通攻-普通防-属性攻(Sp.ATK)-属性防(Sp.DEF)
-# 两主属性同向组合图标
+MAIN_ORDER = ["pa", "pd", "ma", "md"]   # phys-atk - phys-def - sp.atk(Sp.ATK) - sp.def(Sp.DEF)
+# Combo icons for two same-direction main stats
 COMBO_UP = {frozenset(["pa", "pd"]): 39, frozenset(["pa", "ma"]): 40, frozenset(["pa", "md"]): 41,
             frozenset(["pd", "ma"]): 42, frozenset(["ma", "md"]): 43, frozenset(["pd", "md"]): 44}
 COMBO_DN = {k: v + 6 for k, v in COMBO_UP.items()}
-# 属性（火水風光闇）攻防图标：base + (攻0/防2) + (上0/下1)
+# Element (fire/water/wind/light/dark) atk/def icons: base + (atk 0/def 2) + (up 0/down 1)
 ELEM_BASE = {1: 18, 2: 22, 3: 26, 4: 30, 5: 34}
 ELEM_CHAR = {"火": 1, "水": 2, "風": 3, "光": 4, "闇": 5}
 
 RE_TAI = re.compile(r"(\d+)(?:[～〜](\d+))?体")
 RE_ELEM = re.compile(r"([火水風光闇])属性(攻撃力|防御力)")
-RE_ET = re.compile(r"次の回復時に回復効果が[0-9.]+%アップするスタック")  # Et: 自身下次回复量↑
+RE_ET = re.compile(r"次の回復時に回復効果が[0-9.]+%アップするスタック")  # Et: self's next heal amount up
 RE_MAXHP = re.compile(r"最大HP[^。]*アップ")
-RE_SELFHEAL = re.compile(r"自身のHP[^。]*回復")   # 012: 造成伤害同时回复自身HP
-# 同句内 HP…回復（含 大/特大 回復；不会匹配 MP回復）。前衛=自身回复 / 後衛=味方回复
+RE_SELFHEAL = re.compile(r"自身のHP[^。]*回復")   # 012: heal self's HP while dealing damage
+# HP...heal within one clause (incl. 大/特大 回復; won't match MP回復). 前衛 = self-heal / 後衛 = ally heal
 RE_HP_HEAL = re.compile(r"HP[^。]*?回復")
 
 
 def target_icon(desc):
-    """技能首个「N(～M)体」-> 目标数图标 (max,min)。"""
+    """The skill's first 「N(～M)体」 -> target-count icon (max,min)."""
     m = RE_TAI.search(desc)
     if not m:
         return ""
@@ -134,7 +137,7 @@ def target_icon(desc):
 
 
 def _dir_after(desc, start):
-    """从 start 到本句末，最近的 アップ(+)/ダウン(-)；都没有返回 None。"""
+    """From start to the end of the sentence, the nearest アップ(+)/ダウン(-); None if neither."""
     end = desc.find("。", start)
     seg = desc[start:(end if end != -1 else len(desc))]
     up = seg.find("アップ")
@@ -149,11 +152,11 @@ def _dir_after(desc, start):
 
 
 def gvg_battle_icons(gvg_skill, fg):
-    """返回 (目标数图标, 数值行, 特效行, 标记行)；后三者为图标路径列表。"""
+    """Return (target-count icon, stat row, special-effect row, mark row); the last three are icon-path lists."""
     desc = (gvg_skill.get("desc", "") if gvg_skill else "") or ""
     fgs = set(fg)
 
-    # —— 数值行（2.1）：主属性(含组合) -> 属性攻防 -> 最大HP ——
+    # -- stat row (2.1): main stats (incl. combos) -> element atk/def -> max HP --
     stat = []
     flags = stat_flags(desc)
     dirs = {}
@@ -165,12 +168,12 @@ def gvg_battle_icons(gvg_skill, fg):
     for sign, combo_map, single_map in (("+", COMBO_UP, MAIN_UP), ("-", COMBO_DN, MAIN_DN)):
         grp = [s for s in MAIN_ORDER if dirs.get(s) == sign]
         i = 0
-        while i + 1 < len(grp):           # 同向两两组合，优先组合图标
+        while i + 1 < len(grp):           # pair up same-direction stats, preferring the combo icon
             stat.append(combo_map[frozenset([grp[i], grp[i + 1]])])
             i += 2
         if i < len(grp):
             stat.append(single_map[grp[i]])
-    # 属性攻防（火水風光闇），攻在前防在后
+    # Element atk/def (fire/water/wind/light/dark), atk before def
     elem_atk, elem_def = [], []
     for m in RE_ELEM.finditer(desc):
         el = ELEM_CHAR[m.group(1)]
@@ -188,7 +191,7 @@ def gvg_battle_icons(gvg_skill, fg):
     if RE_MAXHP.search(desc):
         stat.append(38)
 
-    # —— 特效行（2.2）——
+    # -- special-effect row (2.2) --
     special = []
     if RE_SELFHEAL.search(desc):
         special.append(12)
@@ -201,7 +204,7 @@ def gvg_battle_icons(gvg_skill, fg):
     if "SD" in fgs:
         special.append(70)
 
-    # —— 标记行（2.3）——
+    # -- mark row (2.3) --
     mark = []
     if "Mt" in fgs:
         mark.append(51)
@@ -217,9 +220,9 @@ def gvg_battle_icons(gvg_skill, fg):
 
 
 def stat_change_set(gvg_skill):
-    """卡片数值变动涉及的「单项」图标编号集合（不做组合、不含最大HP）。
-    主属性 4 种各上/下 -> 1-8；五属性攻防各上/下 -> 18-37；共 28 个可能值。
-    一张卡可同时命中多项。"""
+    """Set of "individual" icon numbers a card's stat changes involve (no combos, no max HP).
+    4 main stats up/down -> 1-8; 5 elements atk/def up/down -> 18-37; 28 possible values.
+    A single card may hit several."""
     desc = (gvg_skill.get("desc", "") if gvg_skill else "") or ""
     nums = set()
     flags = stat_flags(desc)
@@ -228,7 +231,7 @@ def stat_change_set(gvg_skill):
             nums.add(MAIN_UP[s])
         if s + "-" in flags:
             nums.add(MAIN_DN[s])
-    for m in RE_ELEM.finditer(desc):     # 火水風光闇 × 攻/防
+    for m in RE_ELEM.finditer(desc):     # fire/water/wind/light/dark x atk/def
         el = ELEM_CHAR[m.group(1)]
         atk = (m.group(2) == "攻撃力")
         d = _dir_after(desc, m.start())
@@ -239,11 +242,11 @@ def stat_change_set(gvg_skill):
 
 
 # ---------------------------------------------------------------------------
-# twdb（allb.game-db.tw）卡片编号
+# twdb (allb.game-db.tw) card id
 # ---------------------------------------------------------------------------
 def tw_full_id(e):
-    """twdb 卡片编号 = cardMstId * 10 + 变体位。
-    变体位：普通卡=0；可觉醒卡=1（两个条目同号）；超觉醒卡=该条目 cardType(1-7)。"""
+    """twdb card id = cardMstId * 10 + variant digit.
+    Variant: normal = 0; awakenable = 1 (both entries share it); super-awakening = that entry's cardType(1-7)."""
     awk = e.get("awk", "none")
     if awk == "awakening":
         digit = 1
@@ -255,11 +258,11 @@ def tw_full_id(e):
 
 
 # ---------------------------------------------------------------------------
-# 右上角被动小圆（仅组卡器）
+# Top-right passive dot (deck builder only)
 # ---------------------------------------------------------------------------
 def passive_dot(e):
-    """根据被动技能（GvgAuto 名）返回右上角小圆的颜色（无则空字符串）。
-    効果範囲+1 → #e377c2（品红）；副援:支援UP → #f6c2dd（很浅的粉色）；都不是 → 不加圆。"""
+    """Return the top-right dot color based on the passive (GvgAuto name); empty string if none.
+    効果範囲+1 -> #e377c2 (magenta); 副援:支援UP -> #f6c2dd (very light pink); otherwise -> no dot."""
     ga = e["skills"].get("gvgAuto")
     name = (ga.get("name", "") if ga else "") or ""
     if "効果範囲+1" in name:
@@ -270,7 +273,7 @@ def passive_dot(e):
 
 
 # ---------------------------------------------------------------------------
-# 构建选卡单元
+# Build picker units
 # ---------------------------------------------------------------------------
 def build_units(entries):
     units = []
@@ -303,14 +306,14 @@ def build_units(entries):
             "mark": card_markers.marker_for(e, "deck"),
             "pdot": passive_dot(e),
             "tgt": tgt, "sk1": sk1, "sk2": sk2, "sk3": sk3,
-            "sc": sorted(stat_change_set(gvg)),       # 单项数值变动图标编号
+            "sc": sorted(stat_change_set(gvg)),       # individual stat-change icon numbers
             "heal": 1 if RE_HP_HEAL.search(gdesc) else 0,
         })
     return units
 
 
 # ---------------------------------------------------------------------------
-# 渲染
+# Rendering
 # ---------------------------------------------------------------------------
 def render_mini_skill(sk, icon):
     if sk is None:
@@ -324,12 +327,12 @@ def render_mini_skill(sk, icon):
 
 
 def pdot_html(color):
-    """右上角被动小圆（圆心=卡图右上顶点，可略微溢出卡框）。"""
+    """Top-right passive dot (center = card art's top-right corner, may slightly overflow the frame)."""
     return ('<span class="pdot" style="background:%s"></span>' % color) if color else ""
 
 
 def render_overlay(tgt, sk1, sk2, sk3):
-    """卡图上的战斗图标：左上目标数 / 右下数值横排 / 右侧居中特效竖列 / 左侧居中标记竖列。"""
+    """Battle icons over the card art: top-left target count / bottom-right stat row / right-center special column / left-center mark column."""
     def grp(cls, lst):
         if not lst:
             return ""
@@ -338,9 +341,9 @@ def render_overlay(tgt, sk1, sk2, sk3):
     h = ""
     if tgt:
         h += '<img class="tgt" src="%s" alt="">' % tgt
-    h += grp("sk-stat", sk1)       # 数值变动：右下横排
-    h += grp("sk-special", sk2)    # 特效：右侧居中竖列
-    h += grp("sk-mark", sk3)       # 标记：左侧居中竖列
+    h += grp("sk-stat", sk1)       # stat changes: bottom-right horizontal row
+    h += grp("sk-special", sk2)    # special effects: right-center vertical column
+    h += grp("sk-mark", sk3)       # marks: left-center vertical column
     return h
 
 
@@ -438,13 +441,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   button.btn, .ddbtn { cursor:pointer; }
   header input#code { width:260px; font-family:monospace; }
 
-  /* 前衛/後衛 开关 */
+  /* 前衛/後衛 toggle */
   .roleSw { display:inline-flex; border:1px solid #5b6b8c; border-radius:8px; overflow:hidden; }
   .roleSw button { border:0; background:#fff; color:#333; padding:6px 14px; cursor:pointer; font-weight:600; }
   .roleSw button.on { background:#5b6b8c; color:#fff; }
   header label.chk { display:inline-flex; align-items:center; gap:4px; cursor:pointer; color:#444; }
 
-  /* 通用复选框下拉 */
+  /* Generic checkbox dropdown */
   .dd { position:relative; }
   .ddbtn.active { background:#dce7f6; border-color:#5b6b8c; font-weight:600; }
   .ddpanel { display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:60; background:#fff;
@@ -456,7 +459,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .ddpanel label.disabled { color:#bbb; cursor:not-allowed; }
   .ddpanel input { margin-right:6px; }
 
-  /* 主体两栏：左卡组面板（粘性），右选卡区 */
+  /* Two-column body: deck panel on the left (sticky), picker on the right */
   .layout { display:flex; align-items:flex-start; gap:14px; padding:12px 14px; }
   .deckpane { flex:0 0 510px; position:sticky; top:calc(var(--toolbar-h) + 12px);
               max-height:calc(100vh - var(--toolbar-h) - 24px); overflow:auto;
@@ -468,7 +471,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .deck-group h3 { font-size:14px; margin:0 0 6px; color:#333; border-bottom:1px solid #c5ccda; padding-bottom:3px; }
   .slots { display:grid; grid-template-columns:repeat(5, 88px); gap:6px; justify-content:start; }
   .slot { position:relative; width:88px; height:88px; border:1px solid #b7bdcc; border-radius:6px;
-          background:#fff; overflow:visible; }   /* visible: 让被动小圆能出框显示 */
+          background:#fff; overflow:visible; }   /* visible: lets the passive dot show outside the frame */
   .slot.empty { background:#fff; }
   .slot.empty .blank { width:100%; height:100%; object-fit:cover; display:block; border-radius:6px; }
   .slot.filled { cursor:grab; }
@@ -483,8 +486,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .slot:hover .x { opacity:1; }
   .empty-hint { color:#999; align-self:center; }
 
-  /* 卡图叠放：卡图 + 稀有度边框 + 右上角类别角标（列表/组卡器共用）
-     角标比例受限：纵向 ≤1/4 高、横向 ≤1/2 宽 */
+  /* Card image stack: art + rarity frame + top-right category marker (shared by list/deck builder)
+     Marker size is bounded: <=1/4 height, <=1/2 width */
   .cardimg { position:relative; display:block; width:88px; height:88px; }
   .cardimg .art { width:100%; height:100%; object-fit:cover; display:block; border-radius:6px; }
   .cardimg .art.broken { visibility:hidden; }
@@ -492,18 +495,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cardimg .mark { position:absolute; top:-2px; right:-3px; max-height:38%;
                    height:auto; width:auto; pointer-events:none;
                    filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
-  .slot .cardimg .mark { top:1px; right:1px; }   /* 类别角标在格子内不溢出 */
-  /* 被动小圆：圆心=卡图右上顶点，略微溢出卡框；放到最顶层完整显示（小圆很小，不会挡住其他元素）*/
+  .slot .cardimg .mark { top:1px; right:1px; }   /* keep the category marker inside the slot */
+  /* Passive dot: center = card art's top-right corner, slightly overflows the frame; rendered topmost so it shows fully (it's tiny and won't block anything) */
   .cardimg .pdot { position:absolute; top:-7px; right:-7px; width:14px; height:14px; z-index:10;
                    border-radius:50%; border:2px solid #fff; box-sizing:border-box;
                    box-shadow:0 1px 2px rgba(0,0,0,.55); pointer-events:none; }
-  /* 左上：目标数（与角标同高 38%）；数值=右下横排；特效=右侧居中竖列；标记=左侧居中竖列 */
+  /* Top-left: target count (same 38% height as the marker); stats = bottom-right row; specials = right-center column; marks = left-center column */
   .cardimg .tgt { position:absolute; left:-2px; top:-2px; max-height:38%; height:auto; width:auto;
                   pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,.45)); }
   .slot .cardimg .tgt { left:1px; top:1px; }
   .cardimg .sk-stat { position:absolute; right:1px; bottom:1px; display:flex; gap:1px;
                       justify-content:flex-end; pointer-events:none; }
-  /* 左右两列向下对齐，但底部留出一行(18px)给数值变动行 */
+  /* The left/right columns align downward but leave a row (18px) at the bottom for the stat row */
   .cardimg .sk-special { position:absolute; right:1px; bottom:18px;
                          display:flex; flex-direction:column; align-items:flex-end; gap:1px; pointer-events:none; }
   .cardimg .sk-mark { position:absolute; left:1px; bottom:18px;
@@ -511,7 +514,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cardimg .sk-stat img, .cardimg .sk-special img, .cardimg .sk-mark img {
                       height:15px; width:auto; filter:drop-shadow(0 1px 1px rgba(0,0,0,.55)); }
 
-  /* 统计 */
+  /* Stats */
   .stats h3 { font-size:14px; margin:10px 0 6px; color:#333; border-bottom:1px solid #c5ccda; padding-bottom:3px; }
   .chips { display:flex; flex-wrap:wrap; gap:5px 10px; }
   .chip { display:inline-flex; align-items:center; gap:3px; background:#fff; border:1px solid #cfd5e2;
@@ -530,7 +533,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .lvtbl th { background:#eef1f6; }
   .lvname { font-weight:600; }
 
-  /* 选卡单元 */
+  /* Picker unit */
   .pickpane h2 { font-size:15px; margin:4px 0 8px; color:#222; }
   .units { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
   .unit { width:300px; border:1px solid #b7bdcc; border-radius:8px; background:#fff; padding:8px;
@@ -552,6 +555,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .u-sdesc { color:#333; line-height:1.4; margin-top:2px; }
 
   #pcount { color:#444; }
+
+  /* Global watermark: fixed, covers the whole viewport, top layer, very low opacity (uniqueId 20000216 full art); always visible while scrolling and never blocks interaction */
+  .watermark { position:fixed; inset:0; z-index:9999; pointer-events:none; }
+  .watermark img { width:100%; height:100%; object-fit:cover; opacity:.1; user-select:none; }
 </style>
 </head>
 <body>
@@ -617,6 +624,7 @@ __OTH_UNITS__
     </div>
   </main>
 </div>
+<div class="watermark"><img src="assets/remote/Image/Card/Card020000216.jpg" alt=""></div>
 
 <script>
   var header = document.querySelector('header');
@@ -628,7 +636,7 @@ __OTH_UNITS__
   var GA_LABEL = {dmgup:'ダメージUP',supup:'支援UP',healup:'回復UP',ptup:'獲得マッチPtUP',rangeup:'効果範囲+1'};
   var ROMAN = {'Ⅰ':1,'Ⅱ':2,'Ⅲ':3,'Ⅳ':4,'Ⅴ':5,'Ⅵ':6,'Ⅶ':7,'Ⅷ':8,'Ⅸ':9,'Ⅹ':10};
 
-  // 数値変動（単項）：14 种 × 上/下 = 28 项。图标 = BattleIconSkillImg{n}
+  // Stat changes (individual): 14 stats x up/down = 28 items. Icon = BattleIconSkillImg{n}
   var SC_UP=[1,2,3,4,18,20,22,24,26,28,30,32,34,36];
   var SC_DN=[5,6,7,8,19,21,23,25,27,29,31,33,35,37];
   var SC_NAME={1:'ATK↑',2:'DEF↑',3:'Sp.ATK↑',4:'Sp.DEF↑',5:'ATK↓',6:'DEF↓',7:'Sp.ATK↓',8:'Sp.DEF↓',
@@ -641,7 +649,7 @@ __OTH_UNITS__
   function setHeadOffset(){ document.documentElement.style.setProperty('--toolbar-h', header.offsetHeight+'px'); }
   window.addEventListener('resize', setHeadOffset); setHeadOffset();
 
-  // ---------- 单元数据缓存 ----------
+  // ---------- Unit data cache ----------
   var unitByKey = {};           // 'uid.ct' -> element
   function parseUnit(el){
     var d = el.dataset;
@@ -653,11 +661,11 @@ __OTH_UNITS__
              mt:+d.mt, an:+d.an, ba:+d.ba, et:+d.et, lv:d.lv?d.lv.split(' '):[], el:el };
   }
   units.forEach(function(el){ unitByKey[el.dataset.uid+'.'+el.dataset.ct] = el; });
-  // twdb 编号 -> 单元（可觉醒卡两条目同号，故为数组）
+  // twdb id -> unit(s) (awakenable cards have two entries sharing an id, hence an array)
   var twIndex={};
   units.forEach(function(el){ var t=el.dataset.tw; if(t) (twIndex[t]=twIndex[t]||[]).push(el); });
 
-  // ---------- 下拉面板开关 ----------
+  // ---------- Dropdown panel toggle ----------
   function closePanels(except){
     var ps=document.querySelectorAll('.ddpanel.open');
     for(var i=0;i<ps.length;i++) if(ps[i]!==except) ps[i].classList.remove('open');
@@ -675,13 +683,13 @@ __OTH_UNITS__
     closePanels(null);
   });
 
-  // ---------- 角色（前衛/後衛）----------
+  // ---------- Role (前衛/後衛) ----------
   var role = 'F';
   function validTypes(){ return role==='F' ? [1,2,3,4] : [5,6,7]; }
   function isValidType(t){ return validTypes().indexOf(+t) !== -1; }
 
   function applyRoleToTypeFilter(){
-    // 关闭不属于当前角色的類別选项
+    // disable category options not belonging to the current role
     var boxes=document.querySelectorAll('input[data-f="type"]');
     for(var i=0;i<boxes.length;i++){
       var ok=isValidType(boxes[i].value);
@@ -703,7 +711,7 @@ __OTH_UNITS__
   document.getElementById('roleF').addEventListener('click', function(){ setRole('F'); });
   document.getElementById('roleB').addEventListener('click', function(){ setRole('B'); });
 
-  // ---------- 筛选 ----------
+  // ---------- Filtering ----------
   function selVals(group){
     var arr=[], els=document.querySelectorAll('input[data-f="'+group+'"]:checked');
     for(var i=0;i<els.length;i++) arr.push(els[i].value);
@@ -759,7 +767,7 @@ __OTH_UNITS__
     box.style.display=hide?'none':''; this.textContent=hide?'展開する':'折りたたむ';
   });
 
-  // ---------- 卡组（5 Legendary + 20 メイン 固定格子，可自由拖动重排）----------
+  // ---------- Deck (5 Legendary + 20 メイン fixed slots, freely draggable to reorder) ----------
   var LEG_MAX=5, MAIN_MAX=20;
   var legSlots=[], mainSlots=[];
   for(var _i=0;_i<LEG_MAX;_i++) legSlots.push(null);
@@ -773,7 +781,7 @@ __OTH_UNITS__
 
   function addUnit(el, silent){
     var c=parseUnit(el);
-    if(hasUid(c.uid)){ if(!silent) flash(el); return false; }      // 同卡只能 1 张
+    if(hasUid(c.uid)){ if(!silent) flash(el); return false; }      // only one copy of the same card
     if(!isValidType(c.ct)){ return false; }
     var arr=slotsOf(c.leg), idx=arr.indexOf(null);
     if(idx===-1){ if(!silent) alert(c.leg?'Legendary は最大 5 枚です':'メインカードは最大 20 枚です'); return false; }
@@ -788,7 +796,7 @@ __OTH_UNITS__
   function flash(el){ el.style.transition='none'; el.style.background='#ffd9d9';
     setTimeout(function(){ el.style.transition='background .6s'; el.style.background=''; }, 30); }
 
-  // 选卡区「追加」按钮
+  // Picker "追加" (add) buttons
   document.querySelector('.pickpane').addEventListener('click', function(e){
     var btn=e.target.closest('.u-add'); if(!btn) return;
     addUnit(btn.closest('.unit'), false);
@@ -828,7 +836,7 @@ __OTH_UNITS__
     document.getElementById('othCount').textContent=mainSlots.filter(Boolean).length;
     renderSlotGroup(document.getElementById('legSlots'), legSlots, 'L');
     renderSlotGroup(document.getElementById('othSlots'), mainSlots, 'M');
-    // 标记选卡区中已在卡组里的单元
+    // mark picker units already in the deck
     var inUids={}; deckCards().forEach(function(c){ inUids[c.uid]=1; });
     for(var i=0;i<units.length;i++){
       var inDeck=!!inUids[units[i].dataset.uid];
@@ -839,7 +847,7 @@ __OTH_UNITS__
     if(document.getElementById('deckOnly').checked) applyFilter();
   }
 
-  // 卡组面板：点击「×」移除
+  // Deck panel: click "×" to remove
   document.querySelector('.deckpane').addEventListener('click', function(e){
     var x=e.target.closest('.slot .x'); if(!x) return;
     var slot=x.closest('.slot'); if(slot && slot.dataset.uid) removeUid(slot.dataset.uid);
@@ -848,7 +856,7 @@ __OTH_UNITS__
     if(deckCards().length && confirm('デッキを全てクリアしますか？')){ clearSlots(); renderDeck(); }
   });
 
-  // 拖拽重排（仅同组内：空格子放置 / 与目标格交换）
+  // Drag to reorder (within the same group only: drop into an empty slot / swap with the target slot)
   var dragSrc=null;
   ['legSlots','othSlots'].forEach(function(id){
     var box=document.getElementById(id);
@@ -885,7 +893,7 @@ __OTH_UNITS__
     });
   });
 
-  // ---------- 统计 ----------
+  // ---------- Stats ----------
   function lvSortKey(lab){ var plus=(lab.match(/\\+/g)||[]).length; var r=lab.replace(/\\+/g,''); return (ROMAN[r]||0)*10+plus; }
   function renderStats(){
     var list=deckCards();
@@ -901,24 +909,24 @@ __OTH_UNITS__
       c.lv.forEach(function(t){ var p=t.split(':'); if(lv[p[0]]) lv[p[0]][p[1]]=(lv[p[0]][p[1]]||0)+1; });
     });
 
-    // 類別
+    // category
     document.getElementById('stType').innerHTML = validTypes().map(function(t){
       var n=byType[t]||0;
       return '<span class="chip'+(n?'':' zero')+'"><img src="assets/CardType'+t+'.png" alt="">'
         +TYPE_LABEL[t]+' <b>'+n+'</b></span>';
     }).join('');
-    // 属性
+    // attribute
     document.getElementById('stAttr').innerHTML = [1,2,3,4,5].map(function(a){
       var n=byAttr[a]||0;
       return '<span class="chip'+(n?'':' zero')+'"><img src="assets/Attribute'+a+'.png" alt=""><b>'+n+'</b></span>';
     }).join('');
-    // 目標数
+    // target count
     var tks=Object.keys(byTarget).sort();
     document.getElementById('stTarget').innerHTML = tks.length ? tks.map(function(t){
       return '<span class="chip"><b>'+t+'</b> '+byTarget[t]+'</span>';
     }).join('') : '<span class="empty-hint">—</span>';
 
-    // 数値変動（単項）：每个图标统计命中卡数（一张卡可命中多项）
+    // Stat changes (individual): count cards hitting each icon (a card may hit several)
     var scCount={};
     list.forEach(function(c){ c.sc.forEach(function(n){ scCount[n]=(scCount[n]||0)+1; }); });
     function scChips(arr){ return arr.map(function(n){ var v=scCount[n]||0;
@@ -927,7 +935,7 @@ __OTH_UNITS__
     document.getElementById('stScUp').innerHTML = scChips(SC_UP);
     document.getElementById('stScDn').innerHTML = scChips(SC_DN);
 
-    // スキル分類：buff 变动完全一致（+ 是否含HP回复）归为一类，每卡仅属一类
+    // Skill class: cards with identical buff changes (+ whether they include HP heal) form one class; each card in exactly one
     var groups={};
     list.forEach(function(c){
       var sig=c.sk1.join(' ')+(c.heal?'|H':'');
@@ -943,7 +951,7 @@ __OTH_UNITS__
       return '<span class="chip">'+ic+' <b>'+g.n+'</b></span>';
     }).join('') : '<span class="empty-hint">—</span>';
 
-    // スタック Mt/An/Ba
+    // stacks Mt/An/Ba
     document.getElementById('stStack').innerHTML = ['Mt','An','Ba','Et'].map(function(k){
       return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' 枚 / <b>'+marks[k]+'</b> スタック</div>';
     }).join('');
@@ -951,11 +959,11 @@ __OTH_UNITS__
     document.getElementById('stFeat').innerHTML = ['EH','SD','MN','CT'].map(function(k){
       return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' 枚</div>';
     }).join('');
-    // 五种被动
+    // five passives
     document.getElementById('stGa').innerHTML = ['dmgup','supup','healup','ptup','rangeup'].map(function(k){
       return '<div><span class="k" style="min-width:120px">'+GA_LABEL[k]+'</span> '+(ga[k]||0)+' 枚</div>';
     }).join('');
-    // 逐等级（4 种，除 効果範囲+1）
+    // per-level (4 types, excluding 効果範囲+1)
     document.getElementById('stLevels').innerHTML = ['dmgup','supup','healup','ptup'].map(function(code){
       var m=lv[code]; var keys=Object.keys(m).sort(function(a,b){return lvSortKey(a)-lvSortKey(b);});
       if(!keys.length) return '<div class="lvname">'+GA_LABEL[code]+'：—</div>';
@@ -966,11 +974,11 @@ __OTH_UNITS__
     }).join('');
   }
 
-  // ---------- デッキコード（allb.game-db.tw デッキビルダー URL）----------
-  // 形式：base64( enc62(base-61) | LG... | メイン... | role ) を ?v= に載せる。
-  //   base    = デッキ内 twdb 番号(cardMstId*10+変体)の最小値
-  //   各カード = enc62(番号 - base + 61) + "4"（末尾 "4" は限界突破位）
-  //   role    = 前衛 0 / 後衛 1
+  // ---------- Deck code (allb.game-db.tw deck-builder URL) ----------
+  // Format: base64( enc62(base-61) | LG... | メイン... | role ) carried in ?v=.
+  //   base     = min twdb id (cardMstId*10+variant) in the deck
+  //   per card = enc62(id - base + 61) + "4" (trailing "4" is the limit-break digit)
+  //   role     = 前衛 0 / 後衛 1
   var B62='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
   var TW_URL='https://allb.game-db.tw/deckbuilder?v=';
   function enc62(num){ num=Math.floor(num); if(num<=0) return '0';
@@ -982,7 +990,7 @@ __OTH_UNITS__
     var cards=deckCards(); if(!cards.length) return '';
     var lg=[], nml=[];
     cards.forEach(function(c){ (c.leg?lg:nml).push(c.tw); });
-    lg.sort(function(a,b){return a-b;}); nml.sort(function(a,b){return a-b;});  // 顺序无关
+    lg.sort(function(a,b){return a-b;}); nml.sort(function(a,b){return a-b;});  // order-independent
     var base=Math.min.apply(null, lg.concat(nml));
     var tok=function(id){ return enc62(id-base+61)+'4'; };
     var target=enc62(base-61)+'|'+lg.map(tok).join(',')+'|'+nml.map(tok).join(',')
@@ -995,8 +1003,8 @@ __OTH_UNITS__
     var target, m=str.match(/[?&]v=([^&\\s]+)/);
     try {
       if(m) target=atob(m[1].replace(/ /g,'+'));
-      else if(str.indexOf('|')!==-1) target=str;       // 直接贴 target 文本
-      else target=atob(str.replace(/ /g,'+'));         // 直接贴 base64
+      else if(str.indexOf('|')!==-1) target=str;       // pasted raw target text
+      else target=atob(str.replace(/ /g,'+'));         // pasted raw base64
     } catch(e){ alert('コードのデコードに失敗しました'); return; }
     var parts=target.split('|');
     var base=dec62(parts[0])+61;
@@ -1011,11 +1019,11 @@ __OTH_UNITS__
       if(!groupStr) return;
       groupStr.split(',').forEach(function(t){
         if(!t) return;
-        var rel=dec62(t.slice(0,-1));                  // 去掉末尾 "4"
+        var rel=dec62(t.slice(0,-1));                  // drop the trailing "4"
         if(isNaN(rel)){ miss++; return; }
         var list=twIndex[rel-61+base]||[], el=null;
         for(var i=0;i<list.length;i++){ if(isValidType(list[i].dataset.ct)){ el=list[i]; break; } }
-        if(!el && list.length) el=list[0];             // 觉醒卡两面都不合当前角色时退而取一
+        if(!el && list.length) el=list[0];             // fall back to one entry when neither awakening face fits the current role
         if(!(el && addUnit(el, true))) miss++;
       });
     }
@@ -1031,11 +1039,11 @@ __OTH_UNITS__
     var b=this, o=b.textContent; b.textContent='コピー済'; setTimeout(function(){ b.textContent=o; }, 1000);
   });
 
-  // ---------- 工具 ----------
-  function iconUrl(uid){ return 'https://allb.tqlwsl.moe/Image/CardIcon/S/CardIconS0'+uid+'.png'; }
+  // ---------- Utilities ----------
+  function iconUrl(uid){ return 'assets/remote/Image/CardIcon/S/CardIconS0'+uid+'.png'; }
   function escAttr(s){ return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
-  // ---------- 初始化 ----------
+  // ---------- Init ----------
   applyRoleToTypeFilter();
   applyFilter();
   renderDeck();
@@ -1053,9 +1061,9 @@ def main():
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(html_text)
     leg = sum(1 for u in units if u["leg"])
-    print("已生成卡组编辑器：Legendary %d 个单元 / 其他 %d 个单元（共 %d）"
+    print("Generated deck builder: Legendary %d units / other %d units (total %d)"
           % (leg, len(units) - leg, len(units)))
-    print("输出文件: %s" % OUT)
+    print("Output file: %s" % OUT)
 
 
 if __name__ == "__main__":

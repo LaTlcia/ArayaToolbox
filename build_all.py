@@ -1,25 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-一键更新所有 HTML
-=================
-依次重新生成：
-  * card_list.html     —— 卡牌列表（generate_card_list.py）
-  * deck_builder.html  —— 卡组编辑器（generate_deck_builder.py）
+Rebuild all HTML in one shot
+============================
+Regenerates, in order:
+  * card_list.html     -- card list (generate_card_list.py)
+  * deck_builder.html  -- deck builder (generate_deck_builder.py)
 
-数据更新后，只需运行本脚本即可刷新两个页面：
+After a data update, just run this script to refresh both pages:
     conda run -n localdb python localDB/build_all.py
+
+It first syncs assets (full download the first time, deltas only afterwards) so the
+pages work offline.
 """
 
+import assets_sync
 import generate_card_list
 import generate_deck_builder
 
 
 def main():
-    print("=== 生成卡牌列表 ===")
+    print("=== sync assets ===")
+    data = generate_card_list.build_lookups()
+    entries = generate_card_list.build_entries(*data)
+    assets_sync.sync({e["uniqueId"] for e in entries})
+
+    print("\n=== build card list ===")
     generate_card_list.main()
-    print("\n=== 生成卡组编辑器 ===")
+    print("\n=== build deck builder ===")
     generate_deck_builder.main()
-    print("\n全部完成。")
+    print("\nAll done.")
 
 
 if __name__ == "__main__":

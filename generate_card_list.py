@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-卡牌列表生成脚本
-================
-根据 A.RA.YA/MasterdataBase/ 中的游戏 masterdata JSON 生成一个 HTML 卡牌列表。
+Card list generator
+====================
+Build an HTML card list from the game masterdata JSON in A.RA.YA/MasterdataBase/.
 
-运行方式（在 localdb conda 环境下）：
+How to run (in the localdb conda env):
     conda run -n localdb python localDB/generate_card_list.py
-然后用浏览器打开生成的 localDB/card_list.html 即可。
+Then open the generated localDB/card_list.html in a browser.
 
-数据经常更新，每次更新后重新运行本脚本即可得到最新列表。
-所有文字保留日文原文，不做翻译。
+The data updates regularly; re-run this script after each update for the latest list.
+All displayed text is kept in the original Japanese (not translated).
 
-实现说明见同目录 plan 文件；面板计算规则已用以下两个示例核对通过：
-  - uniqueId 10109004 通攻 = 6915
-  - uniqueId 20000267 (cardType 7) 通攻 = 9207
-仅依赖 Python 标准库（json / html / os）。
+See the plan file in this directory for details; the stat math is verified against
+these two examples:
+  - uniqueId 10109004 phys-atk = 6915
+  - uniqueId 20000267 (cardType 7) phys-atk = 9207
+Standard library only (json / html / os).
 """
 
 import json
@@ -26,17 +27,18 @@ import collections
 import card_markers
 
 # ---------------------------------------------------------------------------
-# 路径（相对脚本自身解析，与当前工作目录无关）
+# Paths (resolved relative to this script, independent of the cwd)
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(SCRIPT_DIR)                       # 工作区根目录
+ROOT = os.path.dirname(SCRIPT_DIR)                       # workspace root
 MST = os.path.join(ROOT, "A.RA.YA", "MasterdataBase")
 OUT = os.path.join(SCRIPT_DIR, "card_list.html")
 
-CARD_ICON_URL = "https://allb.tqlwsl.moe/Image/CardIcon/S/CardIconS0{uid}.png"
+# Card icons now come from the local mirror (downloaded into assets/remote/ by assets_sync.py; offline-capable)
+CARD_ICON_URL = "assets/remote/Image/CardIcon/S/CardIconS0{uid}.png"
 
 # ---------------------------------------------------------------------------
-# 文案映射
+# Label maps
 # ---------------------------------------------------------------------------
 CARD_TYPE_LABEL = {
     1: "通常単体", 2: "通常範囲", 3: "特殊単体", 4: "特殊範囲",
@@ -45,14 +47,14 @@ CARD_TYPE_LABEL = {
 ATTRIBUTE_LABEL = {1: "火", 2: "水", 3: "風", 4: "光", 5: "闇"}
 GRADE_LABEL = {0: "普通", 1: "Legendary", 2: "Ultimate"}
 
-# 四维：type -> (普通/觉醒 max 字段, 觉醒加成字段)
+# Four stats: type -> (normal/awakened max field, awakening bonus field)
 TYPE_FIELDS = {
-    1: ("maxPhysicalAttack", "awakenedAddPhysicalAttack"),    # 通攻
-    2: ("maxPhysicalDefense", "awakenedAddPhysicalDefense"),  # 通防
-    3: ("maxMagicalAttack", "awakenedAddMagicalAttack"),      # 特攻
-    4: ("maxMagicalDefense", "awakenedAddMagicalDefense"),    # 特防
+    1: ("maxPhysicalAttack", "awakenedAddPhysicalAttack"),    # phys-atk
+    2: ("maxPhysicalDefense", "awakenedAddPhysicalDefense"),  # phys-def
+    3: ("maxMagicalAttack", "awakenedAddMagicalAttack"),      # mag-atk
+    4: ("maxMagicalDefense", "awakenedAddMagicalDefense"),    # mag-def
 }
-# Ultimate 新增类别面板字段
+# Ultimate added-category stat fields
 ULT_TYPE_FIELDS = {
     1: ("awakenedAddMaxPhysicalAttack", "awakenedAddPhysicalAttack"),
     2: ("awakenedAddMaxPhysicalDefense", "awakenedAddPhysicalDefense"),
@@ -62,7 +64,7 @@ ULT_TYPE_FIELDS = {
 
 
 # ---------------------------------------------------------------------------
-# 数据加载
+# Data loading
 # ---------------------------------------------------------------------------
 def load_mst(filename):
     path = os.path.join(MST, filename)
@@ -82,7 +84,7 @@ def build_lookups():
     skill = {x["skillMstId"]: x for x in skill_list}
     ultimate = {x["cardMstId"]: x for x in ult_list}
 
-    # Legendary：每个 group 取 limitBreakCount 最高（最强）的那一级
+    # Legendary: per group, take the highest (strongest) limitBreakCount tier
     legendary = {}
     for x in legendary_list:
         gid = x["legendarySkillGroupMstId"]
@@ -90,7 +92,7 @@ def build_lookups():
         if cur is None or x["limitBreakCount"] > cur["limitBreakCount"]:
             legendary[gid] = x
 
-    # 超觉醒：cardMstId -> [按 cardType 排序的记录]
+    # Super-awakening: cardMstId -> [records sorted by cardType]
     super_by_card = collections.defaultdict(list)
     for x in super_list:
         super_by_card[x["cardMstId"]].append(x)
@@ -101,10 +103,10 @@ def build_lookups():
 
 
 # ---------------------------------------------------------------------------
-# 面板计算
+# Stat computation
 # ---------------------------------------------------------------------------
 def lbb_bonus(lbb_entry, t, awakened):
-    """求某界限突破奖励中 type==t 的加成之和（base 或 awakenedAdd）。"""
+    """Sum of bonuses with type==t in a limit-break bonus entry (base or awakenedAdd)."""
     if not lbb_entry:
         return 0
     total = 0
@@ -120,9 +122,9 @@ def lbb_bonus(lbb_entry, t, awakened):
 
 
 def compute_stats(max_obj, fields, add_obj, lbb_entry, include_awk):
-    """返回 {1:通攻, 2:通防, 3:特攻, 4:特防} 的最终面板。
+    """Return the final stats {1:phys-atk, 2:phys-def, 3:mag-atk, 4:mag-def}.
 
-    各维 = max + (觉醒加成, 可选) + base 界限突破 + (觉醒界限突破, 可选)
+    Each = max + (awakening bonus, optional) + base limit-break + (awakening limit-break, optional)
     """
     stats = {}
     for t in (1, 2, 3, 4):
@@ -138,7 +140,7 @@ def compute_stats(max_obj, fields, add_obj, lbb_entry, include_awk):
 
 
 # ---------------------------------------------------------------------------
-# 技能解析
+# Skill resolution
 # ---------------------------------------------------------------------------
 def resolve_skill(skill, sid):
     if not sid:
@@ -168,31 +170,31 @@ def make_skills(skill, legendary, quest_id, gvg_id, gvg_auto_id, legendary_id):
 
 
 # ---------------------------------------------------------------------------
-# 技能文本解析（用于筛选）
+# Skill text parsing (for filtering)
 # ---------------------------------------------------------------------------
 _ROMAN = r"[Ⅰ-Ⅿ]"   # Ⅰ Ⅱ … Ⅹ …
 
-# 四种属性敏感效果（异属性条件下触发），用其后果子句各自判断（一句可同时含多个）
+# Four attribute-sensitive effects (triggered when attributes differ); judged by each consequence clause (a sentence may contain several)
 _RE_MT = re.compile(r"次の攻撃時にダメージが[0-9.]+%アップするスタック")
 _RE_AN = re.compile(r"次の支援/妨害時に支援/妨害効果が[0-9.]+%アップするスタック")
 _RE_BA = re.compile(r"次の被ダメージ時に被ダメージを[0-9.]+%ダウンさせるスタック")
 _RE_CT = re.compile(r"劣勢時は効果が[0-9.]+倍になる")
-_RE_ET = re.compile(r"次の回復時に回復効果が[0-9.]+%アップするスタック")  # Et: 自身下次回复量↑
-_RE_COND = re.compile(r"異なる場合、([^。]*)")           # 异属性条件后果子句
+_RE_ET = re.compile(r"次の回復時に回復効果が[0-9.]+%アップするスタック")  # Et: self's next heal amount up
+_RE_COND = re.compile(r"異なる場合、([^。]*)")           # consequence clause of the different-attribute condition
 _RE_EH = re.compile(r"スキル効果が[0-9.]+倍に")
 _RE_MN = re.compile(r"MP消費を(?:大幅に)?抑え")
 
 
 def target_letter(name):
-    """技能名末尾罗马数字前的字母（目标数 A-G）。"""
+    """The letter before the trailing roman numeral in a skill name (target count A-G)."""
     m = re.search(r"([A-Z])\s*" + _ROMAN + r"+\+?\s*$", name or "")
     return m.group(1) if m else ""
 
 
 def stat_flags(desc):
-    """通攻/特攻/通防/特防/属攻/属防 的增减，编码：pa/ma/pd/md/ea/ed + (+/-)。
+    """Up/down of phys-atk/mag-atk/phys-def/mag-def/elem-atk/elem-def, coded pa/ma/pd/md/ea/ed + (+/-).
 
-    每个属性 token 关联其所在句（到下一个「。」）内最近的 アップ/ダウン。
+    Each stat token is tied to the nearest アップ/ダウン within its sentence (up to the next 「。」).
     """
     flags = set()
     toks = []
@@ -229,7 +231,7 @@ def stat_flags(desc):
 
 
 def skill_feature_codes(sk):
-    """QuestSkill / GvgSkill 的特性集合（用于技能特性筛选）。"""
+    """Feature set of a QuestSkill / GvgSkill (for the skill-feature filter)."""
     if not sk:
         return set()
     desc = sk.get("desc", "") or ""
@@ -257,7 +259,7 @@ def skill_feature_codes(sk):
 
 
 def gvgauto_codes(sk):
-    """GvgAutoSkill 的辅助特性集合（按技能名识别）。"""
+    """Support-feature set of a GvgAutoSkill (identified by skill name)."""
     if not sk:
         return set()
     name = sk.get("name", "") or ""
@@ -276,7 +278,7 @@ def gvgauto_codes(sk):
 
 
 # ---------------------------------------------------------------------------
-# 构建展示条目
+# Build display entries
 # ---------------------------------------------------------------------------
 def make_entry(card, card_type, stats, skills, order,
                awk="none", base_type=0, add_type=0, role=""):
@@ -292,11 +294,11 @@ def make_entry(card, card_type, stats, skills, order,
         "cost": card["deckCost"],
         "pa": pa, "ma": ma, "pd": pd, "md": md,
         "power": pa + pd + ma + md,
-        "order": order,   # 在 getCardMstList.json 中的位置，越大越新
+        "order": order,   # position in getCardMstList.json; larger = newer
         "skills": skills,
-        # —— 角标合成所需：觉醒类型 + 原始/新增类别 + 本条目角色 ——
+        # -- needed for marker compositing: awakening type + original/added category + this entry's role --
         "awk": awk, "baseType": base_type, "addType": add_type, "role": role,
-        # —— 用于筛选的技能派生数据（Quest / Gvg 由开关切换；GvgAuto 独立）——
+        # -- skill-derived data for filtering (Quest / Gvg toggled by a switch; GvgAuto independent) --
         "tq": target_letter(q["name"]) if q else "",
         "tg": target_letter(g["name"]) if g else "",
         "fq": skill_feature_codes(q),
@@ -306,13 +308,13 @@ def make_entry(card, card_type, stats, skills, order,
 
 
 def build_entries(cards, lbb, skill, legendary, ultimate, super_by_card):
-    # 每个 uniqueId 取最高 rarity 的版本；order_of 记录其在 JSON 中的位置（越大越新）
+    # For each uniqueId take the highest-rarity version; order_of records its position in the JSON (larger = newer)
     top = {}
     max_rarity = collections.defaultdict(int)
     order_of = {}
     for i, c in enumerate(cards):
         max_rarity[c["uniqueId"]] = max(max_rarity[c["uniqueId"]], c["rarity"])
-        order_of[c["uniqueId"]] = i   # 最后一次出现的位置
+        order_of[c["uniqueId"]] = i   # position of its last occurrence
     for c in cards:
         uid = c["uniqueId"]
         if c["rarity"] == max_rarity[uid]:
@@ -327,7 +329,7 @@ def build_entries(cards, lbb, skill, legendary, ultimate, super_by_card):
         card_lbb = lbb.get(card["limitBreakBonusMstId"])
 
         if cmid in super_by_card:
-            # —— 超觉醒卡：每个超觉醒类别各一条 ——
+            # -- Super-awakening card: one entry per super-awakening category --
             for s in super_by_card[cmid]:
                 s_lbb = lbb.get(s["limitBreakBonusMstId"])
                 stats = compute_stats(s, TYPE_FIELDS, None, s_lbb, include_awk=True)
@@ -340,8 +342,8 @@ def build_entries(cards, lbb, skill, legendary, ultimate, super_by_card):
                                           awk="super"))
 
         elif card["awakenedAddCardType"] != 0:
-            # —— 可觉醒卡：觉醒后的两个类别各一条 ——
-            # (1) 原 cardType（觉醒后）
+            # -- Awakenable card: one entry per the two post-awakening categories --
+            # (1) original cardType (after awakening)
             base_stats = compute_stats(card, TYPE_FIELDS, card, card_lbb, include_awk=True)
             base_skills = make_skills(
                 skill, legendary,
@@ -361,11 +363,11 @@ def build_entries(cards, lbb, skill, legendary, ultimate, super_by_card):
             )
             u = ultimate.get(cmid)
             if u is not None:
-                # Ultimate 觉醒卡：新增类别面板独立
+                # Ultimate awakening card: the added category has its own stats
                 u_lbb = lbb.get(u["awakenedAddLimitBreakBonusMstId"])
                 add_stats = compute_stats(u, ULT_TYPE_FIELDS, u, u_lbb, include_awk=True)
             else:
-                # 普通可觉醒卡：两个类别面板相同
+                # Normal awakenable card: both categories share the same stats
                 add_stats = base_stats
             entries.append(make_entry(
                 card, card["awakenedAddCardType"], add_stats, add_skills, order,
@@ -373,7 +375,7 @@ def build_entries(cards, lbb, skill, legendary, ultimate, super_by_card):
                 add_type=card["awakenedAddCardType"], role="add"))
 
         else:
-            # —— 普通卡：单条 ——
+            # -- Normal card: single entry --
             stats = compute_stats(card, TYPE_FIELDS, None, card_lbb, include_awk=False)
             skills = make_skills(
                 skill, legendary,
@@ -386,7 +388,7 @@ def build_entries(cards, lbb, skill, legendary, ultimate, super_by_card):
 
 
 # ---------------------------------------------------------------------------
-# 自检（与给定示例核对）
+# Self-check (against the given examples)
 # ---------------------------------------------------------------------------
 def self_check(entries):
     def find(uid, ct=None):
@@ -397,18 +399,18 @@ def self_check(entries):
 
     e1 = find(10109004)
     assert e1 is not None and e1["pa"] == 6915, \
-        "自检失败: uniqueId 10109004 通攻 应为 6915, 实际 %s" % (e1 and e1["pa"])
+        "self-check failed: uniqueId 10109004 phys-atk should be 6915, got %s" % (e1 and e1["pa"])
     e2 = find(20000267, 7)
     assert e2 is not None and e2["pa"] == 9207, \
-        "自检失败: uniqueId 20000267 cardType7 通攻 应为 9207, 实际 %s" % (e2 and e2["pa"])
-    print("自检通过: 6915 / 9207 ✓")
+        "self-check failed: uniqueId 20000267 cardType7 phys-atk should be 9207, got %s" % (e2 and e2["pa"])
+    print("self-check passed: 6915 / 9207 ✓")
 
 
 # ---------------------------------------------------------------------------
-# HTML 渲染
+# HTML rendering
 # ---------------------------------------------------------------------------
 def fmt(text):
-    """转义日文文本，并把换行（真实换行或字面 \\n）转为 <br>。"""
+    """Escape Japanese text and turn newlines (real or literal \\n) into <br>."""
     if text is None:
         return ""
     text = text.replace("\\n", "\n")
@@ -417,7 +419,7 @@ def fmt(text):
 
 
 def render_skill_cell(sk, icon, col_class):
-    """渲染一个技能单元格：类型图标 + 技能名 + 效果描述。"""
+    """Render one skill cell: type icon + skill name + effect description."""
     if sk is None:
         return '<td class="skill-cell empty %s"></td>' % col_class
     name = fmt(sk["name"])
@@ -492,7 +494,7 @@ def render_row(e):
     )
 
 
-# 列定义：(key, 表头文案, 默认是否显示)。4 个组合列默认隐藏，可在“表示列”中勾选。
+# Column defs: (key, header text, shown by default). The 4 combined columns are hidden by default; toggle them in "表示列".
 COL_DEFS = [
     ("icon", "図", True), ("name", "名称", True), ("type", "類別", True), ("attr", "属性", True),
     ("pa", "通攻", True), ("ma", "特攻", True), ("pd", "通防", True), ("md", "特防", True),
@@ -503,7 +505,7 @@ COL_DEFS = [
     ("gvgAuto", "辅助技能", True), ("legendary", "Legendary技能", True),
 ]
 
-# 技能特性筛选项（针对 Quest/Gvg，由开关切换）：(code, label)
+# Skill-feature filter options (for Quest/Gvg, toggled by a switch): (code, label)
 FEATURE_DEFS = [
     ("Mt", "Mt:「攻撃ダメ20%UP」スタック"),
     ("An", "An:「支援/妨害30%UP」スタック"),
@@ -520,7 +522,7 @@ FEATURE_DEFS = [
     ("ea+", "属攻UP"), ("ea-", "属攻DOWN"),
     ("ed+", "属防UP"), ("ed-", "属防DOWN"),
 ]
-# GvgAuto 辅助特性筛选项：(code, label)
+# GvgAuto support-feature filter options: (code, label)
 GA_DEFS = [
     ("dmgup", "ダメージUP"), ("supup", "支援UP"),
     ("healup", "回復UP"), ("ptup", "獲得マッチPtUP"),
@@ -529,7 +531,7 @@ GA_DEFS = [
 
 
 def build_dropdown(key, label, options):
-    """生成一个复选框下拉筛选器。options: [(value, text), ...]，交给前端做交集筛选。"""
+    """Build a checkbox dropdown filter. options: [(value, text), ...], intersected on the front end."""
     boxes = "".join(
         '<label><input type="checkbox" data-f="{k}" value="{v}"> {t}</label>'.format(
             k=key, v=html.escape(str(v), quote=True), t=html.escape(str(t)))
@@ -542,11 +544,11 @@ def build_dropdown(key, label, options):
 
 
 def render_html(entries):
-    # 默认按更新顺序降序（新 -> 旧）
+    # Default sort: by update order descending (new -> old)
     entries = sorted(entries, key=lambda e: e["order"], reverse=True)
     rows_html = "\n".join(render_row(e) for e in entries)
 
-    # 列显隐复选框
+    # Column show/hide checkboxes
     col_checkboxes = "".join(
         '<label><input type="checkbox" data-col="{k}"{chk}> {l}</label>'.format(
             k=k, l=html.escape(lbl), chk=" checked" if d else "")
@@ -555,7 +557,7 @@ def render_html(entries):
     hidden = ",".join(".col-%s" % k for k, lbl, d in COL_DEFS if not d)
     col_init_style = (hidden + "{display:none}") if hidden else ""
 
-    # 动态选项：Cost 与 目標数（A-G）取自实际数据
+    # Dynamic options: Cost and target count (A-G) taken from the actual data
     costs = sorted({e["cost"] for e in entries})
     targets = sorted({t for e in entries for t in (e["tq"], e["tg"]) if t})
 
@@ -579,7 +581,7 @@ def render_html(entries):
     return out
 
 
-# 模板使用 __TOKEN__ 占位符 + str.replace 注入，避免 CSS/JS 大括号转义问题。
+# The template uses __TOKEN__ placeholders + str.replace injection to avoid escaping CSS/JS braces.
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -602,7 +604,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   #clear { cursor:pointer; }
   #count { color:#444; margin-left:auto; }
 
-  /* 通用复选框下拉（筛选 / 列显隐） */
+  /* Generic checkbox dropdown (filters / column show-hide) */
   .dd { position:relative; }
   .ddbtn { cursor:pointer; }
   .ddbtn.active { background:#dce7f6; border-color:#5b6b8c; font-weight:600; }
@@ -614,7 +616,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .ddpanel label:hover { background:#eef; }
   .ddpanel input { margin-right:6px; }
 
-  /* 表格：白/淡灰行 + 全黑网格线 */
+  /* Table: white/light-grey rows + all-black grid lines */
   table { border-collapse: separate; border-spacing:0; width:100%;
           border-top:1px solid var(--line); border-left:1px solid var(--line); }
   th, td { border-right:1px solid var(--line); border-bottom:1px solid var(--line); }
@@ -632,8 +634,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   tbody tr:hover { background:#fff3cd; }
   tr.hidden { display:none; }
 
-  /* 卡图叠放：卡图 + 稀有度边框 + 右上角类别角标
-     角标比例受限：纵向 ≤1/4 高、横向 ≤1/2 宽（觉醒角标最宽，约 0.42 宽，满足） */
+  /* Card image stack: art + rarity frame + top-right category marker
+     Marker size is bounded: <=1/4 height, <=1/2 width (awakening marker is widest, ~0.42 width, OK) */
   .cardimg { position:relative; display:block; width:76px; height:76px; }
   .cardimg .art { width:100%; height:100%; object-fit:cover; display:block; border-radius:6px; }
   .cardimg .art.broken { visibility:hidden; }
@@ -657,6 +659,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .skill-name { font-weight:600; }
   .skill-name img.skill-i { width:15px; height:15px; object-fit:contain; vertical-align:-2px; margin-right:4px; }
   .skill-desc { color:#333; line-height:1.4; margin-top:2px; }
+
+  /* Global watermark: fixed, covers the whole viewport, top layer, very low opacity (uniqueId 20000216 full art); always visible while scrolling and never blocks interaction */
+  .watermark { position:fixed; inset:0; z-index:9999; pointer-events:none; }
+  .watermark img { width:100%; height:100%; object-fit:cover; opacity:.1; user-select:none; }
 </style>
 <style id="colstyle">__COL_INIT_STYLE__</style>
 </head>
@@ -706,6 +712,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 __ROWS__
 </tbody>
 </table>
+<div class="watermark"><img src="assets/remote/Image/Card/Card020000216.jpg" alt=""></div>
 <script>
   var tbody = document.getElementById('rows');
   var header = document.querySelector('header');
@@ -715,14 +722,14 @@ __ROWS__
   var count = document.getElementById('count');
   var TOTAL = __TOTAL__;
 
-  // 让粘性表头停在工具栏正下方
+  // Keep the sticky header right below the toolbar
   function setHeadOffset() {
     document.documentElement.style.setProperty('--toolbar-h', header.offsetHeight + 'px');
   }
   window.addEventListener('resize', setHeadOffset);
   setHeadOffset();
 
-  // ---------- 下拉面板开关 ----------
+  // ---------- Dropdown panel toggle ----------
   function closePanels(except) {
     var ps = document.querySelectorAll('.ddpanel.open');
     for (var i = 0; i < ps.length; i++) if (ps[i] !== except) ps[i].classList.remove('open');
@@ -742,7 +749,7 @@ __ROWS__
     closePanels(null);
   });
 
-  // ---------- 列显示控制 ----------
+  // ---------- Column visibility ----------
   var colStyle = document.getElementById('colstyle');
   var colCbs = document.querySelectorAll('input[data-col]');
   function applyCols() {
@@ -753,7 +760,7 @@ __ROWS__
     colStyle.textContent = hidden.length ? hidden.join(',') + '{display:none}' : '';
   }
 
-  // ---------- 过滤（各组之间取交集；组内单值列为「属于所选集合」，技能特性为「全部具备」）----------
+  // ---------- Filtering (groups intersected; single-value groups = "in the selected set", skill features = "has all") ----------
   function selVals(group) {
     var arr = [], els = document.querySelectorAll('input[data-f="' + group + '"]:checked');
     for (var i = 0; i < els.length; i++) arr.push(els[i].value);
@@ -796,7 +803,7 @@ __ROWS__
     updateBtns();
   }
 
-  // 复选框变化：列显隐 / 筛选；技能特性对象切换
+  // Checkbox changes: column show-hide / filter; skill-feature target switch
   document.addEventListener('change', function(e) {
     if (e.target.matches && e.target.matches('input[data-col]')) applyCols();
     else if (e.target.matches && e.target.matches('input[data-f]')) applyFilter();
@@ -810,7 +817,7 @@ __ROWS__
     applyFilter();
   });
 
-  // ---------- 排序（每列可点击）----------
+  // ---------- Sorting (each column clickable) ----------
   var sortTh = null, sortKey = 'order', sortGet = 'num', sortDir = -1;
   function cellText(row, idx) {
     var el = row.cells[idx].querySelector('.skill-name');
@@ -855,7 +862,7 @@ __ROWS__
     });
   }
 
-  // 初始：列显隐 + 过滤 + 默认按「図」=更新順 降序
+  // Init: columns + filter + default sort by 「図」 = update order descending
   applyCols();
   applyFilter();
   sortTh = document.querySelector('thead th[data-sort="order"]');
@@ -867,7 +874,7 @@ __ROWS__
 
 
 # ---------------------------------------------------------------------------
-# 主流程
+# Main
 # ---------------------------------------------------------------------------
 def main():
     cards, lbb, skill, legendary, ultimate, super_by_card = build_lookups()
@@ -876,8 +883,8 @@ def main():
     html_text = render_html(entries)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(html_text)
-    print("已生成 %d 条卡牌条目" % len(entries))
-    print("输出文件: %s" % OUT)
+    print("Generated %d card entries" % len(entries))
+    print("Output file: %s" % OUT)
 
 
 if __name__ == "__main__":
