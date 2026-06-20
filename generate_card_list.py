@@ -663,6 +663,27 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   /* Global watermark: fixed, covers the whole viewport, top layer, very low opacity (uniqueId 20000216 full art); always visible while scrolling and never blocks interaction */
   .watermark { position:fixed; inset:0; z-index:9999; pointer-events:none; }
   .watermark img { width:100%; height:100%; object-fit:cover; opacity:.1; user-select:none; }
+
+  /* ---------- Mobile / responsive ---------- */
+  @media (max-width: 700px) {
+    body { font-size:12px; }
+    header { padding:6px 8px; gap:6px 8px; }
+    header h1 { font-size:14px; flex-basis:100%; margin:0; }
+    header label { margin-right:2px; }
+    header input, header select, .ddbtn, #clear { font-size:12px; padding:4px 6px; }
+    header input[type=text] { width:130px; }
+    #count { flex-basis:100%; margin-left:0; }
+    /* The wide table stays but becomes compact; the page scrolls sideways to reach far columns. */
+    thead th { padding:5px 6px; font-size:12px; }
+    tbody td { padding:4px 6px; }
+    .cardimg { width:52px; height:52px; }
+    .c-icon { width:58px; }
+    .c-name { min-width:92px; max-width:150px; line-height:1.25; }
+    .c-tag img { width:22px; height:22px; margin-right:3px; }
+    .skill-cell { min-width:140px; max-width:200px; }
+    .skill-desc { font-size:11px; }
+    .skill-name img.skill-i { width:13px; height:13px; }
+  }
 </style>
 <style id="colstyle">__COL_INIT_STYLE__</style>
 </head>

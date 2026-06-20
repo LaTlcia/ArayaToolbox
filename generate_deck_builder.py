@@ -559,6 +559,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   /* Global watermark: fixed, covers the whole viewport, top layer, very low opacity (uniqueId 20000216 full art); always visible while scrolling and never blocks interaction */
   .watermark { position:fixed; inset:0; z-index:9999; pointer-events:none; }
   .watermark img { width:100%; height:100%; object-fit:cover; opacity:.1; user-select:none; }
+
+  /* ---------- Mobile / responsive ---------- */
+  @media (max-width: 820px) {
+    body { font-size:12px; }
+    header { padding:6px 8px; gap:6px 8px; }
+    header h1 { font-size:14px; flex-basis:100%; margin:0; }
+    header input, header select, .ddbtn, button.btn { font-size:12px; padding:4px 6px; }
+    .roleSw button { padding:5px 10px; }
+    #pcount { flex-basis:100%; }
+
+    /* Stack the deck panel above the picker; the deck panel is no longer sticky. */
+    .layout { flex-direction:column; gap:10px; padding:10px; }
+    .deckpane { flex:1 1 auto; width:100%; position:static; max-height:none; overflow:visible; }
+    .pickpane { width:100%; }
+    .deckpane #code { min-width:120px; }
+
+    /* Fixed 5-wide slot grids shrink to fit; slots stay square via aspect-ratio. */
+    .slots { grid-template-columns:repeat(5, minmax(0,1fr)); gap:4px; }
+    .slot { width:auto; height:auto; aspect-ratio:1; }
+
+    /* Picker units one per row. */
+    .units { gap:8px; }
+    .unit { width:100%; }
+  }
 </style>
 </head>
 <body>
