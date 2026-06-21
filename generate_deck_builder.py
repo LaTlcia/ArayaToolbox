@@ -662,7 +662,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                  pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
   /* per-effect 牌効 chips (under each deck card) */
   .pme-eff { display:inline-block; font-size:10px; margin:1px 2px 0 0; padding:0 3px; border-radius:3px;
-             font-variant-numeric:tabular-nums; line-height:1.5; }
+             font-variant-numeric:tabular-nums; line-height:1.5; cursor:pointer; }
+  .pme-eff:hover { outline:1px solid rgba(0,0,0,.35); }
   .pme-eff b { font-weight:700; }
   .k-dmg { background:#ffe1e1; color:#a01f1f; }
   .k-heal { background:#e1f3e6; color:#1f7a3a; }
@@ -672,6 +673,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .slotcell { display:flex; flex-direction:column; align-items:stretch; }
   .slot-pme { display:none; margin-top:2px; }
   .deckpane.pme-on .slot-pme { display:block; }
+
+  /* 牌効 breakdown popup (click a chip -> per-region calculation) */
+  .bd-modal { display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.45);
+              align-items:center; justify-content:center; padding:16px; }
+  .bd-modal.open { display:flex; }
+  .bd-box { background:#fff; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.4);
+            max-width:520px; width:100%; max-height:86vh; overflow:auto; }
+  .bd-head { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid #d8dde8;
+             position:sticky; top:0; background:#fff; font-size:14px; font-weight:700; }
+  .bd-head #bdTitle { flex:1; }
+  .bd-head .bk { font-weight:600; font-size:11px; padding:1px 6px; border-radius:4px; }
+  .bd-head #bdClose { border:none; background:#eef1f6; border-radius:6px; width:26px; height:26px;
+                      font-size:18px; line-height:1; cursor:pointer; color:#444; }
+  .bd-head #bdClose:hover { background:#dde3ee; }
+  .bd-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .bd-table th { text-align:left; padding:5px 12px; background:#f4f6fa; color:#566; font-weight:600;
+                 border-bottom:1px solid #e2e6ee; }
+  .bd-table td { padding:5px 12px; border-bottom:1px solid #eef0f5; vertical-align:top; }
+  .bd-table .bn { white-space:nowrap; font-weight:600; color:#333; }
+  .bd-table .bv { white-space:nowrap; font-variant-numeric:tabular-nums; color:#1a5; font-weight:700; }
+  .bd-table .bd { color:#667; line-height:1.45; }
+  .bd-total { padding:10px 12px; font-size:15px; font-weight:700; text-align:right;
+              border-top:2px solid #9aa3b8; font-variant-numeric:tabular-nums; }
 
   /* Global watermark: fixed, covers the whole viewport, top layer, very low opacity (uniqueId 20000216 full art); always visible while scrolling and never blocks interaction */
   .watermark { position:fixed; inset:0; z-index:9999; pointer-events:none; }
@@ -820,6 +844,20 @@ __OTH_UNITS__
   </main>
 </div>
 <div class="watermark"><img src="assets/remote/Image/Card/Card020000216.jpg" alt=""></div>
+
+<div class="bd-modal" id="bdModal">
+  <div class="bd-box">
+    <div class="bd-head">
+      <span id="bdTitle"></span>
+      <button type="button" id="bdClose" title="閉じる">×</button>
+    </div>
+    <table class="bd-table">
+      <thead><tr><th>区域</th><th>係数</th><th>内訳</th></tr></thead>
+      <tbody id="bdBody"></tbody>
+    </table>
+    <div class="bd-total" id="bdTotal"></div>
+  </div>
+</div>
 
 <script>
   var header = document.querySelector('header');
@@ -1339,44 +1377,138 @@ __OTH_UNITS__
       (c.calc.pu||[]).forEach(function(p){ passPool.push({k:p.k,coeff:p.c,host:c.calc.a,plus:c.calc.pp||0}); });
       (c.calc.lu||[]).forEach(function(l){ legPool.push(l); });
     });
-    function passUP(kind){
-      var s=0;
-      passPool.forEach(function(p){ if(p.k!==kind) return;
+    function passUP(kind, detail){
+      // The 支援UP passive boosts BOTH 支援(buff) and 妨害(debuff) effect lines
+      // (incl. buff changes carried by damage / heal cards), so debuff draws the buff pool.
+      var pk=(kind==='debuff')?'buff':kind, s=0;
+      passPool.forEach(function(p){ if(p.k!==pk) return;
         var r=(PBASE[p.plus]||0.15)+(theme[p.host]?0.02:0);
         r=r*(1+myRateUp)*(1-enRateDown); if(r<0)r=0; if(r>1)r=1;
-        s+=p.coeff*1.5*r; });
+        var add=p.coeff*1.5*r;
+        if(detail) detail.push({coeff:p.coeff, rate:r, plus:p.plus, host:p.host, add:add});
+        s+=add; });
       return s;
     }
-    function legUP(at,kind,atk){ var s=0; legPool.forEach(function(l){ if(l.a===at&&l.k===kind&&(l.t===0||l.t===atk)) s+=l.p; }); return s; }
-    function adxVal(at){ var base=theme[at]?[0.95,1,1.055,1.055*0.95]:[0.95,1,1.05,1.05*0.95]; return base[adx[at]]; }
+    function legUP(at,kind,atk,detail){ var s=0; legPool.forEach(function(l){ if(l.a===at&&l.k===kind&&(l.t===0||l.t===atk)){ s+=l.p; if(detail) detail.push(l); } }); return s; }
+    // ADX 4-choice: 0.95 / 1 / (1.05, or 1.055 with theme) / that ×0.95.
+    // The 0.95 component (choice #0 and #3) applies only to ダメージ·妨害; 支援·回復 drop it.
+    function adxVal(at, kind){
+      var idx=adx[at], t=theme[at]?1.055:1.05, has95=(kind==='dmg'||kind==='debuff');
+      if(idx===2) return t;
+      if(idx===3) return has95?t*0.95:t;
+      if(idx===0) return has95?0.95:1;
+      return 1;
+    }
 
     // clear previous results, then write each card's per-effect rates under its slot
+    BREAKDOWN={};
     var allp=document.querySelectorAll('.slot-pme');
     for(var i=0;i<allp.length;i++) allp[i].innerHTML='';
     deck.forEach(function(c){ if(!c.calc||!c.calc.e.length) return;
       var at=c.calc.a, ct=c.calc.c;
       var trig=(c.calc.ut||[]).some(function(t){ return activeTypes[t]; });
       var cos=(costJob&&costJob===ct)?1.15:1;
-      var charmM=1+(charm[at]||0)/100, adxM=adxVal(at), themeM=theme[at]?1.1:1;
+      var charmM=1+(charm[at]||0)/100, themeM=theme[at]?1.1:1;
       var attrB=attrBoost[at]||0, shB=shieldDown[at]||0;
       var ehMul=ehct?((c.calc.eh>0?c.calc.eh:1)*(c.calc.ct>0?c.calc.ct:1)):1;
       var parts='';
-      c.calc.e.forEach(function(e){
-        var mag=(e.m+(trig?(c.calc.am||0):0))*(1+(c.calc.tm||0));
+      c.calc.e.forEach(function(e, ei){
+        var addMag=trig?(c.calc.am||0):0, tm=c.calc.tm||0;
+        var mag=(e.m+addMag)*(1+tm);
         var stack=e.k==='dmg'?(sMt?1.2:1):(e.k==='heal'?(sEt?1.3:1):(sAn?1.3:1));
-        var up=1+passUP(e.k)+legUP(at,e.k,e.t);
+        var pdet=[], ldet=[], pUp=passUP(e.k,pdet), lUp=legUP(at,e.k,e.t,ldet), up=1+pUp+lUp;
         // オーダー加成: attribute boost (all kinds) + 特効 by card type − 相手 特効 by card type;
         // attribute shield skips 回復; damage shield + 劣勢 only hit damage
-        var cmd=1+attrB+(effUp[ct]||0)-(effDown[ct]||0);
-        if(e.k!=='heal') cmd-=shB;
-        if(e.k==='dmg') cmd-=(e.t===2?dmgRedM:dmgRedP), cmd+=disadv;
+        var cmdAttr=attrB, cmdEffUp=effUp[ct]||0, cmdEffDown=effDown[ct]||0,
+            cmdShB=(e.k!=='heal')?shB:0, cmdDmgRed=0, cmdDis=0;
+        if(e.k==='dmg'){ cmdDmgRed=(e.t===2?dmgRedM:dmgRedP); cmdDis=disadv; }
+        var cmd=1+cmdAttr+cmdEffUp-cmdEffDown-cmdShB-cmdDmgRed+cmdDis;
+        var adxM=adxVal(at, e.k);   // 0.95 component is damage/debuff only
         var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
-        parts+='<span class="pme-eff k-'+e.k+'" title="'+escAttr(e.l)+'">'+pesc(e.l)+' <b>'+rate.toFixed(3)+'</b></span>';
+        // store the per-region breakdown for the click-to-explain popup
+        var R=[
+          {n:'数値区', v:1, note:'固定 (出力は変換率)'},
+          {n:'GVG補正', v:e.g, note:e.k==='dmg'?'ダメージ → 0.1':'非ダメージ → 1'},
+          {n:'技能系数', v:mag, note:magNote(e.m, addMag, tm)},
+          {n:'技能等級', v:1.5, note:'固定 (Lv.最大)'},
+          {n:'得意', v:cos, note:cos>1?('一致 (cardType '+ct+')'):'不一致 → 1'},
+          {n:'恩惠', v:1.1, note:'固定'},
+          {n:'スタック', v:stack, note:stackNote(e.k,sMt,sAn,sEt)},
+          {n:'CHARM', v:charmM, note:'属性'+ATTR_JP[at]+' +'+(charm[at]||0)+'%'},
+          {n:'ADX', v:adxM, note:adxNote(at, e.k)},
+          {n:'テーマ', v:themeM, note:theme[at]?('属性'+ATTR_JP[at]+' テーマ一致 → 1.1'):'不一致 → 1'},
+          {n:'UP区', v:up, note:upNote(pdet,ldet)},
+          {n:'特効', v:ehMul, note:ehct?('ON: EH×'+(c.calc.eh>0?c.calc.eh:1)+' × CT×'+(c.calc.ct>0?c.calc.ct:1)):'OFF → 1'},
+          {n:'オーダー加成', v:cmd, note:cmdNote(cmdAttr,cmdEffUp,cmdEffDown,cmdShB,cmdDmgRed,cmdDis)},
+          {n:'乱数', v:e.n, note:(e.k==='dmg'||e.k==='heal')?'ダメージ/回復 → 0.95':'非ダメージ → 1'}
+        ];
+        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate};
+        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="クリックで計算内訳を表示">'+pesc(e.l)+' <b>'+rate.toFixed(3)+'</b></span>';
       });
       var box=document.querySelector('.slot-pme[data-uid="'+c.uid+'"]');
       if(box) box.innerHTML=parts;
     });
   }
+
+  // ----- breakdown popup (click a 牌効 chip to see how the number was produced) -----
+  var BREAKDOWN={};
+  var ATTR_JP={1:'火',2:'水',3:'風',4:'光',5:'闇'};
+  function fmtNum(v){ var s=(Math.round(v*1e6)/1e6).toString(); return s; }
+  function magNote(base, add, tm){
+    var s='基礎 '+fmtNum(base);
+    if(add) s+=' + 指令 '+fmtNum(add);
+    if(tm) s+=' ×(1+チャージ '+fmtNum(tm)+')';
+    return s;
+  }
+  function stackNote(kind,sMt,sAn,sEt){
+    if(kind==='dmg') return sMt?'Mt ON → 1.2':'Mt OFF → 1';
+    if(kind==='heal') return sEt?'Et ON → 1.3':'Et OFF → 1';
+    return sAn?'An ON → 1.3':'An OFF → 1';
+  }
+  function adxNote(at, kind){
+    var s='ADX選択 #'+adxIdx(at)+' (属性'+ATTR_JP[at]+(themeSel(at)?' テーマ有':'')+')';
+    if((kind!=='dmg'&&kind!=='debuff')&&(adxIdx(at)===0||adxIdx(at)===3)) s+=' / 支援·回復は0.95を除外';
+    return s;
+  }
+  function adxIdx(at){ return +document.getElementById('adx'+at).value; }
+  function themeSel(at){ return document.getElementById('theme'+at).checked; }
+  function upNote(pdet,ldet){
+    var lines=['1'];
+    pdet.forEach(function(p){ lines.push('+ 支援UP 係数'+fmtNum(p.coeff)+'×1.5×発動'+fmtNum(p.rate)+' = '+fmtNum(p.add)); });
+    ldet.forEach(function(l){ lines.push('+ Legendary '+fmtNum(l.p)); });
+    if(lines.length===1) lines.push('(UP源なし)');
+    return lines.join('\\n');
+  }
+  function cmdNote(attr,effUp,effDown,shB,dmgRed,dis){
+    var lines=['1'];
+    if(attr) lines.push('+ 属性 '+fmtNum(attr));
+    if(effUp) lines.push('+ 味方特効 '+fmtNum(effUp));
+    if(effDown) lines.push('− 相手特効 '+fmtNum(effDown));
+    if(shB) lines.push('− 属性盾 '+fmtNum(shB));
+    if(dmgRed) lines.push('− ダメージ盾 '+fmtNum(dmgRed));
+    if(dis) lines.push('+ 劣勢 '+fmtNum(dis));
+    if(lines.length===1) lines.push('(オーダー効果なし)');
+    return lines.join('\\n');
+  }
+  function showBreakdown(key){
+    var bd=BREAKDOWN[key]; if(!bd) return;
+    var rows='';
+    bd.R.forEach(function(r){
+      rows+='<tr><td class="bn">'+pesc(r.n)+'</td><td class="bv">×'+fmtNum(r.v)+'</td>'
+           +'<td class="bd">'+pesc(r.note).replace(/\\n/g,'<br>')+'</td></tr>';
+    });
+    var kindJp={dmg:'ダメージ',heal:'回復',buff:'支援',debuff:'妨害'}[bd.kind]||bd.kind;
+    document.getElementById('bdTitle').innerHTML=pesc(bd.card)+' <span class="bk k-'+bd.kind+'">'+pesc(bd.label)+' ('+kindJp+')</span>';
+    document.getElementById('bdBody').innerHTML=rows;
+    document.getElementById('bdTotal').textContent='牌効 = '+bd.rate.toFixed(4);
+    document.getElementById('bdModal').classList.add('open');
+  }
+  function hideBreakdown(){ document.getElementById('bdModal').classList.remove('open'); }
+  document.addEventListener('click', function(e){
+    var chip=e.target.closest('.pme-eff'); if(chip&&chip.dataset.bd){ showBreakdown(chip.dataset.bd); return; }
+    if(e.target.id==='bdModal'||e.target.closest('#bdClose')) hideBreakdown();
+  });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') hideBreakdown(); });
 
   document.getElementById('pmeToggle').addEventListener('click', function(){
     var on=!deckpane.classList.contains('pme-on');
