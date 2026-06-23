@@ -58,9 +58,6 @@ ASSETS_STATE_FILE = os.path.join(ASSETS_LOCAL_DIR, ".sync_state.json")
 SPRITE_DIR = os.path.join(ASSETS_DIR, "Sprite")
 MARKER_DIR = os.path.join(ASSETS_DIR, "markers")
 
-SKILL_ICON = os.path.join(SPRITE_DIR, "BattleIconSkillImg%03d.png")
-TGT_ICON = os.path.join(SPRITE_DIR, "BattleIconTargetNumberImg%03d%03d.png")
-
 ASSET_CARD_ICON_REMOTE = "Image/CardIcon/S/CardIconS0%s.png"
 ASSET_TACTICS_ICON_REMOTE = "Image/TacticsIcon/S/TacticsIconS%03d.png"
 ASSET_WATERMARK_REMOTE = "Image/Card/Card020000216.jpg"
@@ -70,6 +67,9 @@ URL_TACTICS_ICON = "assets/remote/Image/TacticsIcon/S/TacticsIconS{uid:03d}.png"
 URL_WATERMARK = "assets/remote/" + ASSET_WATERMARK_REMOTE
 URL_MARKER_DIR = "assets/markers"
 URL_SPRITE_DIR = "assets/Sprite"
+
+SKILL_ICON = "../data/assets/Sprite/BattleIconSkillImg%03d.png"
+TGT_ICON = "../data/assets/Sprite/BattleIconTargetNumberImg%03d%03d.png"
 
 # ===========================================================================
 DOWNLOAD_WORKERS = 16
