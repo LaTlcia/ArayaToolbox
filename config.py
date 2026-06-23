@@ -20,8 +20,8 @@ DECK_BUILDER_OUT = os.path.join(OUTPUT_DIR, "deck_builder.html")
 # ===========================================================================
 # Page language:  "cn" | "jp" | "en"   (files: ./language/<code>.json)
 # ===========================================================================
-LANGUAGE = (os.environ.get("ARAYA_LANG", "").strip().lower() or "cn")
-LANGUAGE_FALLBACK = "cn"           
+LANGUAGE = (os.environ.get("ARAYA_LANG", "").strip().lower() or "jp")
+LANGUAGE_FALLBACK = "jp"
 
 # ===========================================================================
 MASTERDATA_DB_DIR = os.path.join(os.path.dirname(PROJECT_ROOT), "A.RA.YA", "MasterdataBase")
@@ -68,8 +68,8 @@ URL_MARKER_DIR = "assets/markers"
 URL_SPRITE_DIR = "assets/Sprite"
 
 # ===========================================================================
-DOWNLOAD_WORKERS = 8
-HTTP_TIMEOUT = 60
+DOWNLOAD_WORKERS = 16
+HTTP_TIMEOUT = 30
 USER_AGENT = "ArayaToolbox/1.0"
 
 
