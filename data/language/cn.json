@@ -1,28 +1,54 @@
 {
-  "_meta": { "name": "简体中文", "code": "cn", "html_lang": "zh" },
-
-  "attribute": { "1": "火", "2": "水", "3": "风", "4": "光", "5": "暗" },
-
+  "_meta": {
+    "name": "简体中文",
+    "code": "cn",
+    "html_lang": "zh"
+  },
+  "attribute": {
+    "1": "火",
+    "2": "水",
+    "3": "风",
+    "4": "光",
+    "5": "暗"
+  },
   "card_type": {
-    "1": "通常单体", "2": "通常范围", "3": "特殊单体", "4": "特殊范围",
-    "5": "支援", "6": "妨害", "7": "回复"
+    "1": "通常单体",
+    "2": "通常范围",
+    "3": "特殊单体",
+    "4": "特殊范围",
+    "5": "支援",
+    "6": "妨害",
+    "7": "回复"
   },
-
-  "grade": { "0": "N卡", "1": "L卡", "2": "U卡" },
-
-  "rarity": { "4": "★4", "5": "★5", "6": "★6" },
-
+  "grade": {
+    "0": "N卡",
+    "1": "L卡",
+    "2": "U卡"
+  },
+  "rarity": {
+    "4": "★4",
+    "5": "★5",
+    "6": "★6"
+  },
   "stat": {
-    "pa": "通攻", "ma": "特攻", "pd": "通防", "md": "特防",
-    "power": "战斗力", "cost": "Cost", "mp": "消耗MP",
-    "papd": "通攻+通防", "mamd": "特攻+特防", "pama": "通攻+特攻", "pdmd": "通防+特防"
+    "pa": "通攻",
+    "ma": "特攻",
+    "pd": "通防",
+    "md": "特防",
+    "power": "战斗力",
+    "cost": "Cost",
+    "mp": "消耗MP",
+    "papd": "通攻+通防",
+    "mamd": "特攻+特防",
+    "pama": "通攻+特攻",
+    "pdmd": "通防+特防"
   },
-
   "skill_type": {
-    "quest": "对HUGE技能", "gvg": "GVG技能",
-    "gvgAuto": "辅助技能", "legendary": "Legendary技能"
+    "quest": "对HUGE技能",
+    "gvg": "GVG技能",
+    "gvgAuto": "辅助技能",
+    "legendary": "Legendary技能"
   },
-
   "card_list": {
     "title": "卡牌列表",
     "search": "搜索",
@@ -32,15 +58,33 @@
     "clear": "清除",
     "count_suffix": "张",
     "filter": {
-      "attr": "属性", "type": "类别", "grade": "等级", "cost": "Cost",
-      "target": "目标数", "feat": "技能特性", "ga": "辅助特性"
+      "attr": "属性",
+      "type": "类别",
+      "grade": "等级",
+      "cost": "Cost",
+      "target": "目标数",
+      "feat": "技能特性",
+      "ga": "辅助特性"
     },
     "col": {
-      "icon": "图", "name": "名称", "type": "类别", "attr": "属性",
-      "pa": "通攻", "ma": "特攻", "pd": "通防", "md": "特防",
-      "power": "战斗力", "cost": "Cost",
-      "papd": "通攻+通防", "mamd": "特攻+特防", "pama": "通攻+特攻", "pdmd": "通防+特防",
-      "quest": "对HUGE技能", "gvg": "GVG技能", "gvgAuto": "辅助技能", "legendary": "Legendary技能"
+      "icon": "图",
+      "name": "名称",
+      "type": "类别",
+      "attr": "属性",
+      "pa": "通攻",
+      "ma": "特攻",
+      "pd": "通防",
+      "md": "特防",
+      "power": "战斗力",
+      "cost": "Cost",
+      "papd": "通攻+通防",
+      "mamd": "特攻+特防",
+      "pama": "通攻+特攻",
+      "pdmd": "通防+特防",
+      "quest": "对HUGE技能",
+      "gvg": "GVG技能",
+      "gvgAuto": "辅助技能",
+      "legendary": "Legendary技能"
     },
     "feature": {
       "Mt": "Mt:「攻击伤害20%UP」叠加",
@@ -51,19 +95,27 @@
       "SD": "SD: 异属性效果范围最大",
       "MN": "MN: 异属性MP消耗DOWN",
       "CT": "CT: 劣势时效果UP",
-      "pa+": "通攻UP", "pa-": "通攻DOWN",
-      "ma+": "特攻UP", "ma-": "特攻DOWN",
-      "pd+": "通防UP", "pd-": "通防DOWN",
-      "md+": "特防UP", "md-": "特防DOWN",
-      "ea+": "属攻UP", "ea-": "属攻DOWN",
-      "ed+": "属防UP", "ed-": "属防DOWN"
+      "pa+": "通攻UP",
+      "pa-": "通攻DOWN",
+      "ma+": "特攻UP",
+      "ma-": "特攻DOWN",
+      "pd+": "通防UP",
+      "pd-": "通防DOWN",
+      "md+": "特防UP",
+      "md-": "特防DOWN",
+      "ea+": "属攻UP",
+      "ea-": "属攻DOWN",
+      "ed+": "属防UP",
+      "ed-": "属防DOWN"
     },
     "ga": {
-      "dmgup": "伤害UP", "supup": "支援UP", "healup": "回复UP",
-      "ptup": "获得Match点UP", "rangeup": "效果范围+1"
+      "dmgup": "伤害UP",
+      "supup": "支援UP",
+      "healup": "回复UP",
+      "ptup": "获得Match点UP",
+      "rangeup": "效果范围+1"
     }
   },
-
   "tactics_list": {
     "title": "指令列表",
     "search": "搜索",
@@ -71,24 +123,139 @@
     "cols": "显示列",
     "clear": "清除",
     "count_suffix": "个",
-    "filter": { "rarity": "稀有度", "cat": "效果类别", "mp": "MP消耗" },
+    "filter": {
+      "rarity": "稀有度",
+      "cat": "效果类别",
+      "mp": "MP消耗"
+    },
     "mp_yes": "有消耗",
     "mp_no": "无消耗",
     "cat": {
-      "attr": "属性", "shield": "盾", "rate": "发动率", "buff": "buff",
-      "eff": "特定效果", "mp": "MP", "other": "其他"
+      "attr": "属性",
+      "shield": "盾",
+      "rate": "发动率",
+      "buff": "buff",
+      "eff": "特定效果",
+      "mp": "MP",
+      "other": "其他"
     },
     "col": {
-      "icon": "图", "name": "名称",
-      "pa": "通攻", "ma": "特攻", "pd": "通防", "md": "特防",
+      "icon": "图",
+      "name": "名称",
+      "pa": "通攻",
+      "ma": "特攻",
+      "pd": "通防",
+      "md": "特防",
       "power": "战斗力",
-      "papd": "通攻+通防", "mamd": "特攻+特防", "pama": "通攻+特攻", "pdmd": "通防+特防",
+      "papd": "通攻+通防",
+      "mamd": "特攻+特防",
+      "pama": "通攻+特攻",
+      "pdmd": "通防+特防",
       "mp": "消耗MP",
-      "quest": "对HUGE技能", "gvg": "GVG技能"
+      "quest": "对HUGE技能",
+      "gvg": "GVG技能"
     }
   },
-
   "deck_builder": {
-    "title": "卡组构筑器"
+    "title": "卡组构筑器",
+    "ui": {
+      "role_switch_confirm": "切换前卫/后卫会清空当前卡组，确定吗？",
+      "stack_count": "叠加 (张数 / 总叠加数)",
+      "restore_fail": "张卡片无法还原（可能是数据更新或类型不符）",
+      "skill_cls": "技能分类（按buff变动）",
+      "clear_deck_confirm": "要清空整个卡组吗？",
+      "sim_settings": "技能效果量模拟 设定",
+      "main_max": "主卡最多 20 张",
+      "leg_max": "Legendary 最多 5 张",
+      "decode_fail": "代码解码失败",
+      "click_breakdown": "点击查看计算明细",
+      "stat_change": "数值变动（单项）",
+      "ga_levels": "辅助技能按等级",
+      "ally_orders": "我方 生效中指令",
+      "enemy_orders": "对方 生效中指令",
+      "bd_excl095": " / 支援·回复排除0.95",
+      "bd_fixed_conv": "固定 (输出为转化率)",
+      "bad_format": "代码格式不正确",
+      "code_ph": "卡组代码 (game-db URL)",
+      "bd_theme_match": " 主题一致 → 1.1",
+      "bd_dmgheal095": "伤害/回复 → 0.95",
+      "ga_count": "辅助技能 (张数)",
+      "sim_label": "技能效果量模拟",
+      "bd_no_order": "(无指令效果)",
+      "bd_match_open": "一致 (cardType ",
+      "bd_skillcoef": "技能系数",
+      "bd_fixed_lvmax": "固定 (Lv.最大)",
+      "bd_adx_select": "ADX选择 #",
+      "bd_ally_eff": "我方特效",
+      "bd_enemy_eff": "对方特效",
+      "bd_effect_total": "技能效果量",
+      "bd_order": "指令加成",
+      "bd_nondmg1": "非伤害 → 1",
+      "bd_no_up": "(无UP来源)",
+      "bd_dmg_shield": "伤害盾",
+      "bd_attr_shield": "属性盾",
+      "bd_nomatch1": "不一致 → 1",
+      "bd_skillgrade": "技能等级",
+      "bd_theme_has": " 有主题",
+      "bd_dmg01": "伤害 → 0.1",
+      "filter_clear": "清除筛选",
+      "leg_cards": "Legendary 卡",
+      "deck_clear": "清空卡组",
+      "main_cards": "主卡",
+      "deck_only": "仅卡组内",
+      "stack_mt": "Mt(攻20%)",
+      "stack_an": "An(支妨30%)",
+      "stack_et": "Et(回30%)",
+      "bd_disadv": "劣势",
+      "bd_random": "随机",
+      "bd_numeric": "数值区",
+      "rate_up": "发动率↑",
+      "rate_down": "发动率↓",
+      "bd_grace": "恩惠",
+      "bd_gvg": "GVG修正",
+      "bd_charge_word": "充能",
+      "bd_command_word": "指令",
+      "bd_base_word": "基础",
+      "bd_proc_word": "发动",
+      "target_lbl": "目标数",
+      "search_ph": "按名称搜索",
+      "no_change": "无变动",
+      "collapse": "折叠",
+      "expand": "展开",
+      "in_deck": "✓ 已编入",
+      "hp_heal": "HP回复",
+      "specialty": "得意",
+      "feature_lbl": "特性",
+      "shown_suffix": "项",
+      "bd_up": "UP区",
+      "bd_fixed": "固定",
+      "bd_coeff": "系数",
+      "bd_detail": "明细",
+      "bd_region": "区域",
+      "increase": "增加",
+      "decrease": "减少",
+      "none_dash": "— 无 —",
+      "stack_title": "叠加",
+      "role_front": "前卫",
+      "role_back": "后卫",
+      "theme": "主题",
+      "search": "搜索",
+      "close": "关闭",
+      "copied": "已复制",
+      "copy": "复制",
+      "load": "读取",
+      "main": "主卡",
+      "none": "无",
+      "add": "＋ 添加",
+      "remove": "移除",
+      "eff": "特效",
+      "attr_lbl": "属性",
+      "type_lbl": "类别",
+      "shield": "盾",
+      "cards_unit": "张",
+      "damage": "伤害",
+      "atk_suffix": "攻",
+      "def_suffix": "防"
+    }
   }
 }

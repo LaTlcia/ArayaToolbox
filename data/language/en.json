@@ -1,28 +1,54 @@
 {
-  "_meta": { "name": "English", "code": "en", "html_lang": "en" },
-
-  "attribute": { "1": "Fire", "2": "Water", "3": "Wind", "4": "Light", "5": "Dark" },
-
+  "_meta": {
+    "name": "English",
+    "code": "en",
+    "html_lang": "en"
+  },
+  "attribute": {
+    "1": "Fire",
+    "2": "Water",
+    "3": "Wind",
+    "4": "Light",
+    "5": "Dark"
+  },
   "card_type": {
-    "1": "Phys Single", "2": "Phys AoE", "3": "Sp Single", "4": "Sp AoE",
-    "5": "Buff", "6": "Debuff", "7": "Heal"
+    "1": "Phys Single",
+    "2": "Phys AoE",
+    "3": "Sp Single",
+    "4": "Sp AoE",
+    "5": "Buff",
+    "6": "Debuff",
+    "7": "Heal"
   },
-
-  "grade": { "0": "Normal", "1": "Legendary", "2": "Ultimate" },
-
-  "rarity": { "4": "★4", "5": "★5", "6": "★6" },
-
+  "grade": {
+    "0": "Normal",
+    "1": "Legendary",
+    "2": "Ultimate"
+  },
+  "rarity": {
+    "4": "★4",
+    "5": "★5",
+    "6": "★6"
+  },
   "stat": {
-    "pa": "P.ATK", "ma": "S.ATK", "pd": "P.DEF", "md": "S.DEF",
-    "power": "Power", "cost": "Cost", "mp": "MP Cost",
-    "papd": "P.ATK+P.DEF", "mamd": "S.ATK+S.DEF", "pama": "P.ATK+S.ATK", "pdmd": "P.DEF+S.DEF"
+    "pa": "P.ATK",
+    "ma": "S.ATK",
+    "pd": "P.DEF",
+    "md": "S.DEF",
+    "power": "Power",
+    "cost": "Cost",
+    "mp": "MP Cost",
+    "papd": "P.ATK+P.DEF",
+    "mamd": "S.ATK+S.DEF",
+    "pama": "P.ATK+S.ATK",
+    "pdmd": "P.DEF+S.DEF"
   },
-
   "skill_type": {
-    "quest": "vs HUGE", "gvg": "GVG",
-    "gvgAuto": "Support", "legendary": "Legendary"
+    "quest": "vs HUGE",
+    "gvg": "GVG",
+    "gvgAuto": "Support",
+    "legendary": "Legendary"
   },
-
   "card_list": {
     "title": "Card List",
     "search": "Search",
@@ -32,15 +58,33 @@
     "clear": "Clear",
     "count_suffix": "cards",
     "filter": {
-      "attr": "Attribute", "type": "Type", "grade": "Grade", "cost": "Cost",
-      "target": "Targets", "feat": "Skill traits", "ga": "Support traits"
+      "attr": "Attribute",
+      "type": "Type",
+      "grade": "Grade",
+      "cost": "Cost",
+      "target": "Targets",
+      "feat": "Skill traits",
+      "ga": "Support traits"
     },
     "col": {
-      "icon": "Img", "name": "Name", "type": "Type", "attr": "Attr",
-      "pa": "P.ATK", "ma": "S.ATK", "pd": "P.DEF", "md": "S.DEF",
-      "power": "Power", "cost": "Cost",
-      "papd": "P.ATK+P.DEF", "mamd": "S.ATK+S.DEF", "pama": "P.ATK+S.ATK", "pdmd": "P.DEF+S.DEF",
-      "quest": "vs HUGE", "gvg": "GVG", "gvgAuto": "Support", "legendary": "Legendary"
+      "icon": "Img",
+      "name": "Name",
+      "type": "Type",
+      "attr": "Attr",
+      "pa": "P.ATK",
+      "ma": "S.ATK",
+      "pd": "P.DEF",
+      "md": "S.DEF",
+      "power": "Power",
+      "cost": "Cost",
+      "papd": "P.ATK+P.DEF",
+      "mamd": "S.ATK+S.DEF",
+      "pama": "P.ATK+S.ATK",
+      "pdmd": "P.DEF+S.DEF",
+      "quest": "vs HUGE",
+      "gvg": "GVG",
+      "gvgAuto": "Support",
+      "legendary": "Legendary"
     },
     "feature": {
       "Mt": "Mt: 'attack dmg +20%' stack",
@@ -51,19 +95,27 @@
       "SD": "SD: max range vs off-attr",
       "MN": "MN: MP cost down vs off-attr",
       "CT": "CT: effect up when losing",
-      "pa+": "P.ATK up", "pa-": "P.ATK down",
-      "ma+": "S.ATK up", "ma-": "S.ATK down",
-      "pd+": "P.DEF up", "pd-": "P.DEF down",
-      "md+": "S.DEF up", "md-": "S.DEF down",
-      "ea+": "Attr.ATK up", "ea-": "Attr.ATK down",
-      "ed+": "Attr.DEF up", "ed-": "Attr.DEF down"
+      "pa+": "P.ATK up",
+      "pa-": "P.ATK down",
+      "ma+": "S.ATK up",
+      "ma-": "S.ATK down",
+      "pd+": "P.DEF up",
+      "pd-": "P.DEF down",
+      "md+": "S.DEF up",
+      "md-": "S.DEF down",
+      "ea+": "Attr.ATK up",
+      "ea-": "Attr.ATK down",
+      "ed+": "Attr.DEF up",
+      "ed-": "Attr.DEF down"
     },
     "ga": {
-      "dmgup": "Damage up", "supup": "Buff up", "healup": "Heal up",
-      "ptup": "Match Pt up", "rangeup": "Range +1"
+      "dmgup": "Damage up",
+      "supup": "Buff up",
+      "healup": "Heal up",
+      "ptup": "Match Pt up",
+      "rangeup": "Range +1"
     }
   },
-
   "tactics_list": {
     "title": "Order List",
     "search": "Search",
@@ -71,24 +123,139 @@
     "cols": "Columns",
     "clear": "Clear",
     "count_suffix": "items",
-    "filter": { "rarity": "Rarity", "cat": "Effect type", "mp": "MP use" },
+    "filter": {
+      "rarity": "Rarity",
+      "cat": "Effect type",
+      "mp": "MP use"
+    },
     "mp_yes": "Costs MP",
     "mp_no": "No MP cost",
     "cat": {
-      "attr": "Attribute", "shield": "Shield", "rate": "Proc rate", "buff": "Buff",
-      "eff": "Specific effect", "mp": "MP", "other": "Other"
+      "attr": "Attribute",
+      "shield": "Shield",
+      "rate": "Proc rate",
+      "buff": "Buff",
+      "eff": "Specific effect",
+      "mp": "MP",
+      "other": "Other"
     },
     "col": {
-      "icon": "Img", "name": "Name",
-      "pa": "P.ATK", "ma": "S.ATK", "pd": "P.DEF", "md": "S.DEF",
+      "icon": "Img",
+      "name": "Name",
+      "pa": "P.ATK",
+      "ma": "S.ATK",
+      "pd": "P.DEF",
+      "md": "S.DEF",
       "power": "Power",
-      "papd": "P.ATK+P.DEF", "mamd": "S.ATK+S.DEF", "pama": "P.ATK+S.ATK", "pdmd": "P.DEF+S.DEF",
+      "papd": "P.ATK+P.DEF",
+      "mamd": "S.ATK+S.DEF",
+      "pama": "P.ATK+S.ATK",
+      "pdmd": "P.DEF+S.DEF",
       "mp": "MP Cost",
-      "quest": "vs HUGE", "gvg": "GVG"
+      "quest": "vs HUGE",
+      "gvg": "GVG"
     }
   },
-
   "deck_builder": {
-    "title": "Deck Builder"
+    "title": "Deck Builder",
+    "ui": {
+      "role_switch_confirm": "Switching the front/back line will clear the current deck. Continue?",
+      "stack_count": "Stacks (cards / total)",
+      "restore_fail": "cards could not be restored (data update or type mismatch?)",
+      "skill_cls": "Skill class (by buff change)",
+      "clear_deck_confirm": "Clear the entire deck?",
+      "sim_settings": "Effect simulator settings",
+      "main_max": "Max 20 main cards",
+      "leg_max": "Max 5 Legendary cards",
+      "decode_fail": "Failed to decode the code",
+      "click_breakdown": "Click to see the calculation",
+      "stat_change": "Stat changes (single)",
+      "ga_levels": "Support skills by level",
+      "ally_orders": "Ally active orders",
+      "enemy_orders": "Enemy active orders",
+      "bd_excl095": " / buff·heal excludes 0.95",
+      "bd_fixed_conv": "fixed (output = conversion rate)",
+      "bad_format": "Invalid code format",
+      "code_ph": "Deck code (game-db URL)",
+      "bd_theme_match": " theme match → 1.1",
+      "bd_dmgheal095": "damage/heal → 0.95",
+      "ga_count": "Support skills (cards)",
+      "sim_label": "Effect simulator",
+      "bd_no_order": "(no order effect)",
+      "bd_match_open": "match (cardType ",
+      "bd_skillcoef": "Skill coeff",
+      "bd_fixed_lvmax": "fixed (Lv. max)",
+      "bd_adx_select": "ADX choice #",
+      "bd_ally_eff": "ally Sp.eff",
+      "bd_enemy_eff": "enemy Sp.eff",
+      "bd_effect_total": "Skill effect amount",
+      "bd_order": "Order bonus",
+      "bd_nondmg1": "non-damage → 1",
+      "bd_no_up": "(no UP source)",
+      "bd_dmg_shield": "damage shield",
+      "bd_attr_shield": "attr shield",
+      "bd_nomatch1": "no match → 1",
+      "bd_skillgrade": "Skill grade",
+      "bd_theme_has": " themed",
+      "bd_dmg01": "damage → 0.1",
+      "filter_clear": "Clear filters",
+      "leg_cards": "Legendary cards",
+      "deck_clear": "Clear deck",
+      "main_cards": "Main cards",
+      "deck_only": "In deck only",
+      "stack_mt": "Mt(ATK20%)",
+      "stack_an": "An(buff/debuff30%)",
+      "stack_et": "Et(heal30%)",
+      "bd_disadv": "disadvantage",
+      "bd_random": "Random",
+      "bd_numeric": "Base",
+      "rate_up": "Proc rate↑",
+      "rate_down": "Proc rate↓",
+      "bd_grace": "Grace",
+      "bd_gvg": "GVG correction",
+      "bd_charge_word": "charge",
+      "bd_command_word": "command",
+      "bd_base_word": "base",
+      "bd_proc_word": "proc",
+      "target_lbl": "Targets",
+      "search_ph": "Search by name",
+      "no_change": "No change",
+      "collapse": "Collapse",
+      "expand": "Expand",
+      "in_deck": "✓ Added",
+      "hp_heal": "HP heal",
+      "specialty": "Specialty",
+      "feature_lbl": "Traits",
+      "shown_suffix": "shown",
+      "bd_up": "UP zone",
+      "bd_fixed": "fixed",
+      "bd_coeff": "Factor",
+      "bd_detail": "Breakdown",
+      "bd_region": "Region",
+      "increase": "Increase",
+      "decrease": "Decrease",
+      "none_dash": "— none —",
+      "stack_title": "Stacks",
+      "role_front": "Front",
+      "role_back": "Back",
+      "theme": "Theme",
+      "search": "Search",
+      "close": "Close",
+      "copied": "Copied",
+      "copy": "Copy",
+      "load": "Load",
+      "main": "Main",
+      "none": "None",
+      "add": "＋ Add",
+      "remove": "Remove",
+      "eff": "Sp.effect",
+      "attr_lbl": "Attribute",
+      "type_lbl": "Type",
+      "shield": "Shield",
+      "cards_unit": "cards",
+      "damage": "Damage",
+      "atk_suffix": " ATK",
+      "def_suffix": " DEF"
+    }
   }
 }

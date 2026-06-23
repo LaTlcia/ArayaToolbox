@@ -388,14 +388,16 @@ def render_unit(u):
         '{overlay}'
         '</span>'
         '<div class="u-meta">'
-        '<img class="u-tag" src="assets/CardType{ct}.png" alt="" title="類別">'
-        '<img class="u-tag" src="assets/Attribute{attr}.png" alt="" title="属性">'
+        '<img class="u-tag" src="assets/CardType{ct}.png" alt="" title="{t_type}">'
+        '<img class="u-tag" src="assets/Attribute{attr}.png" alt="" title="{t_attr}">'
         '</div>'
-        '<button class="u-add" type="button">＋ 追加</button>'
+        '<button class="u-add" type="button">{t_add}</button>'
         '</div>'
         '{gvg_cell}{ga_cell}{leg_cell}'
         '</div>'
     ).format(
+        t_type=config.t("deck_builder.ui.type_lbl"), t_attr=config.t("deck_builder.ui.attr_lbl"),
+        t_add=config.t("deck_builder.ui.add"),
         uid=u["uid"], tw=u["tw"], ct=u["ct"], attr=u["attr"], grade=u["grade"],
         leg=1 if u["leg"] else 0, ult=1 if u["ult"] else 0, order=u["order"],
         name_attr=html.escape(u["name"], quote=True),
@@ -462,6 +464,25 @@ def build_tactics_options():
     return groups
 
 
+def _build_sc_name():
+    """Stat-change display names (the JS SC_NAME map) keyed by id, built from the active
+    language's attribute labels + atk/def suffixes so they follow the chosen language.
+    ids 1-8 = generic ATK/DEF/Sp.ATK/Sp.DEF; ids 18-37 = per-attribute atk/def up/down."""
+    attr = config.int_label_map("attribute")
+    aS = config.t("deck_builder.ui.atk_suffix")
+    dS = config.t("deck_builder.ui.def_suffix")
+    UP, DN = "\u2191", "\u2193"
+    m = {1: "ATK" + UP, 2: "DEF" + UP, 3: "Sp.ATK" + UP, 4: "Sp.DEF" + UP,
+         5: "ATK" + DN, 6: "DEF" + DN, 7: "Sp.ATK" + DN, 8: "Sp.DEF" + DN}
+    for a in range(1, 6):
+        base = 18 + (a - 1) * 4
+        m[base] = attr[a] + aS + UP
+        m[base + 1] = attr[a] + aS + DN
+        m[base + 2] = attr[a] + dS + UP
+        m[base + 3] = attr[a] + dS + DN
+    return {str(k): v for k, v in m.items()}
+
+
 def render_html(units):
     legendary = sorted((u for u in units if u["leg"]),
                        key=lambda u: u["order"], reverse=True)
@@ -485,6 +506,18 @@ def render_html(units):
     js_type_label = {str(k): v for k, v in CARD_TYPE_LABEL.items()}
     js_ga_label = {c: config.t("card_list.ga." + c) for c in ("dmgup", "supup", "healup", "ptup", "rangeup")}
 
+    # deck_builder JS label maps, built from existing sections so they follow the language
+    attr = config.int_label_map("attribute")
+    ctype = config.int_label_map("card_type")
+    js_sc_name = _build_sc_name()
+    js_attr_map = {str(i): attr[i] for i in range(1, 6)}
+    js_attr_arr = [attr[i] for i in range(1, 6)]
+    js_costume_f = [[i, ctype[i]] for i in range(1, 5)]
+    js_costume_b = [[i, ctype[i]] for i in range(5, 8)]
+    js_up_jp = {"dmg": js_ga_label["dmgup"], "heal": js_ga_label["healup"], "buff": js_ga_label["supup"]}
+    js_kind_jp = {"dmg": config.t("deck_builder.ui.damage"),
+                  "heal": ctype[7], "buff": ctype[5], "debuff": ctype[6]}
+
     chrome = {
         "__HTML_LANG__": config.html_lang(),
         "__T_TITLE__": config.t("deck_builder.title"),
@@ -497,6 +530,18 @@ def render_html(units):
         out = out.replace(token, html.escape(val))
     out = out.replace("__JS_TYPE_LABEL__", json.dumps(js_type_label, ensure_ascii=False))
     out = out.replace("__JS_GA_LABEL__", json.dumps(js_ga_label, ensure_ascii=False))
+    out = out.replace("__DBJS_SC_NAME__", json.dumps(js_sc_name, ensure_ascii=False))
+    out = out.replace("__DBJS_ATTR_MAP__", json.dumps(js_attr_map, ensure_ascii=False))
+    out = out.replace("__DBJS_ATTR_ARR__", json.dumps(js_attr_arr, ensure_ascii=False))
+    out = out.replace("__DBJS_COSTUME_F__", json.dumps(js_costume_f, ensure_ascii=False))
+    out = out.replace("__DBJS_COSTUME_B__", json.dumps(js_costume_b, ensure_ascii=False))
+    out = out.replace("__DBJS_UP_JP__", json.dumps(js_up_jp, ensure_ascii=False))
+    out = out.replace("__DBJS_KIND_JP__", json.dumps(js_kind_jp, ensure_ascii=False))
+    db_ui = config.section("deck_builder.ui")
+    for _suffix in sorted(db_ui, key=len, reverse=True):
+        out = out.replace("__DBT_%s__" % _suffix, db_ui[_suffix])
+    for _i in range(1, 6):
+        out = out.replace("__DBT_attr%d__" % _i, attr[_i])
     out = out.replace("__LEG_UNITS__", leg_html)
     out = out.replace("__OTH_UNITS__", oth_html)
     out = out.replace("__LEG_TOTAL__", str(len(legendary)))
@@ -527,7 +572,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   button.btn, .ddbtn { cursor:pointer; }
   header input#code { width:260px; font-family:monospace; }
 
-  /* 前衛/後衛 toggle */
+  /* __DBT_role_front__/__DBT_role_back__ toggle */
   .roleSw { display:inline-flex; border:1px solid #5b6b8c; border-radius:8px; overflow:hidden; }
   .roleSw button { border:0; background:#fff; color:#333; padding:6px 14px; cursor:pointer; font-weight:600; }
   .roleSw button.on { background:#5b6b8c; color:#fff; }
@@ -745,114 +790,114 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <header>
   <h1>__T_TITLE__</h1>
   <div class="roleSw">
-    <button type="button" id="roleF" class="on">前衛</button>
-    <button type="button" id="roleB">後衛</button>
+    <button type="button" id="roleF" class="on">__DBT_role_front__</button>
+    <button type="button" id="roleB">__DBT_role_back__</button>
   </div>
-  <span><label>検索</label><input id="q" type="text" placeholder="名前で検索"></span>
+  <span><label>__DBT_search__</label><input id="q" type="text" placeholder="__DBT_search_ph__"></span>
   __DD_TYPE__
   __DD_ATTR__
   __DD_TARGET__
   __DD_FEAT__
   __DD_GA__
-  <label class="chk"><input type="checkbox" id="deckOnly"> デッキ内のみ</label>
-  <button class="btn" id="clearFilter" type="button">筛选クリア</button>
-  <button class="btn" id="pmeToggle" type="button">スキル効果量シミュ OFF</button>
+  <label class="chk"><input type="checkbox" id="deckOnly"> __DBT_deck_only__</label>
+  <button class="btn" id="clearFilter" type="button">__DBT_filter_clear__</button>
+  <button class="btn" id="pmeToggle" type="button">__DBT_sim_label__ OFF</button>
   <span id="pcount"></span>
 </header>
 
 <div class="layout">
   <aside class="deckpane">
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px;">
-      <input id="code" type="text" placeholder="デッキコード (game-db URL)" spellcheck="false">
-      <button class="btn" id="loadCode" type="button">読込</button>
-      <button class="btn" id="copyCode" type="button">コピー</button>
-      <button class="btn" id="clearDeck" type="button">デッキクリア</button>
+      <input id="code" type="text" placeholder="__DBT_code_ph__" spellcheck="false">
+      <button class="btn" id="loadCode" type="button">__DBT_load__</button>
+      <button class="btn" id="copyCode" type="button">__DBT_copy__</button>
+      <button class="btn" id="clearDeck" type="button">__DBT_deck_clear__</button>
     </div>
 
     <div class="deck-group">
       <h3>Legendary <span id="legCount">0</span>/5</h3>
-      <div id="legSlots" class="slots"><span class="empty-hint">— なし —</span></div>
+      <div id="legSlots" class="slots"><span class="empty-hint">__DBT_none_dash__</span></div>
     </div>
     <div class="deck-group">
-      <h3>メイン <span id="othCount">0</span>/20</h3>
-      <div id="othSlots" class="slots"><span class="empty-hint">— なし —</span></div>
+      <h3>__DBT_main__ <span id="othCount">0</span>/20</h3>
+      <div id="othSlots" class="slots"><span class="empty-hint">__DBT_none_dash__</span></div>
     </div>
 
     <div class="pme" id="pmePanel">
-      <h3>スキル効果量シミュ 設定</h3>
+      <h3>__DBT_sim_settings__</h3>
       <div class="pme-grid">
         <div class="pme-blk"><b>CHARM%</b>
           <div class="pme-attrs">
-            <label>火<input type="number" id="charm1" value="0" step="1"></label>
-            <label>水<input type="number" id="charm2" value="0" step="1"></label>
-            <label>風<input type="number" id="charm3" value="0" step="1"></label>
-            <label>光<input type="number" id="charm4" value="0" step="1"></label>
-            <label>闇<input type="number" id="charm5" value="0" step="1"></label>
+            <label>__DBT_attr1__<input type="number" id="charm1" value="0" step="1"></label>
+            <label>__DBT_attr2__<input type="number" id="charm2" value="0" step="1"></label>
+            <label>__DBT_attr3__<input type="number" id="charm3" value="0" step="1"></label>
+            <label>__DBT_attr4__<input type="number" id="charm4" value="0" step="1"></label>
+            <label>__DBT_attr5__<input type="number" id="charm5" value="0" step="1"></label>
           </div>
         </div>
         <div class="pme-blk"><b>ADX</b>
           <div class="pme-attrs" id="adxRow"></div>
         </div>
-        <div class="pme-blk"><b>テーマ</b>
+        <div class="pme-blk"><b>__DBT_theme__</b>
           <div class="pme-attrs">
-            <label class="chk">火<input type="checkbox" id="theme1"></label>
-            <label class="chk">水<input type="checkbox" id="theme2"></label>
-            <label class="chk">風<input type="checkbox" id="theme3"></label>
-            <label class="chk">光<input type="checkbox" id="theme4"></label>
-            <label class="chk">闇<input type="checkbox" id="theme5"></label>
+            <label class="chk">__DBT_attr1__<input type="checkbox" id="theme1"></label>
+            <label class="chk">__DBT_attr2__<input type="checkbox" id="theme2"></label>
+            <label class="chk">__DBT_attr3__<input type="checkbox" id="theme3"></label>
+            <label class="chk">__DBT_attr4__<input type="checkbox" id="theme4"></label>
+            <label class="chk">__DBT_attr5__<input type="checkbox" id="theme5"></label>
           </div>
         </div>
-        <div class="pme-blk"><b>得意</b>
+        <div class="pme-blk"><b>__DBT_specialty__</b>
           <div class="pme-attrs"><label><select id="costJob"></select></label></div>
         </div>
-        <div class="pme-blk"><b>スタック</b>
+        <div class="pme-blk"><b>__DBT_stack_title__</b>
           <div class="pme-attrs">
-            <label class="chk"><input type="checkbox" id="sMt"> Mt(攻20%)</label>
-            <label class="chk"><input type="checkbox" id="sAn"> An(支妨30%)</label>
-            <label class="chk"><input type="checkbox" id="sEt"> Et(回30%)</label>
+            <label class="chk"><input type="checkbox" id="sMt"> __DBT_stack_mt__</label>
+            <label class="chk"><input type="checkbox" id="sAn"> __DBT_stack_an__</label>
+            <label class="chk"><input type="checkbox" id="sEt"> __DBT_stack_et__</label>
           </div>
         </div>
-        <div class="pme-blk"><b>特効</b>
+        <div class="pme-blk"><b>__DBT_eff__</b>
           <div class="pme-attrs"><label class="chk"><input type="checkbox" id="ehct"> EH/CT </label></div>
         </div>
       </div>
 
       <div class="pme-tac">
-        <div class="pme-tcol"><h4>味方 発動中オーダー</h4>
-          <div class="pme-tg"><span>属性</span><div class="taclist" id="tacMyAttr"></div></div>
-          <div class="pme-tg"><span>発動率↑</span><div class="taclist" id="tacMyRate"></div></div>
-          <div class="pme-tg"><span>特効</span><div class="taclist" id="tacMyEff"></div></div>
+        <div class="pme-tcol"><h4>__DBT_ally_orders__</h4>
+          <div class="pme-tg"><span>__DBT_attr_lbl__</span><div class="taclist" id="tacMyAttr"></div></div>
+          <div class="pme-tg"><span>__DBT_rate_up__</span><div class="taclist" id="tacMyRate"></div></div>
+          <div class="pme-tg"><span>__DBT_eff__</span><div class="taclist" id="tacMyEff"></div></div>
         </div>
-        <div class="pme-tcol"><h4>相手 発動中オーダー</h4>
-          <div class="pme-tg"><span>盾</span><div class="taclist" id="tacEnShield"></div></div>
-          <div class="pme-tg"><span>発動率↓</span><div class="taclist" id="tacEnRate"></div></div>
-          <div class="pme-tg"><span>特効</span><div class="taclist" id="tacEnEff"></div></div>
+        <div class="pme-tcol"><h4>__DBT_enemy_orders__</h4>
+          <div class="pme-tg"><span>__DBT_shield__</span><div class="taclist" id="tacEnShield"></div></div>
+          <div class="pme-tg"><span>__DBT_rate_down__</span><div class="taclist" id="tacEnRate"></div></div>
+          <div class="pme-tg"><span>__DBT_eff__</span><div class="taclist" id="tacEnEff"></div></div>
         </div>
       </div>
     </div>
 
     <div class="stats" id="stats">
-      <h3>類別</h3><div id="stType" class="chips"></div>
-      <h3>属性</h3><div id="stAttr" class="chips"></div>
-      <h3>目標数</h3><div id="stTarget" class="chips"></div>
-      <h3>数値変動（単項）</h3>
-      <div class="sclbl">増加</div><div id="stScUp" class="chips sc"></div>
-      <div class="sclbl">減少</div><div id="stScDn" class="chips sc"></div>
-      <h3>スキル分類（buff変動別）</h3><div id="stSkillCls" class="skcls"></div>
-      <h3>スタック (枚数 / 総スタック数)</h3><div id="stStack" class="statline"></div>
-      <h3>特性</h3><div id="stFeat" class="statline"></div>
-      <h3>補助スキル (枚数)</h3><div id="stGa" class="statline"></div>
-      <h3>補助スキルレベル別</h3><div id="stLevels"></div>
+      <h3>__DBT_type_lbl__</h3><div id="stType" class="chips"></div>
+      <h3>__DBT_attr_lbl__</h3><div id="stAttr" class="chips"></div>
+      <h3>__DBT_target_lbl__</h3><div id="stTarget" class="chips"></div>
+      <h3>__DBT_stat_change__</h3>
+      <div class="sclbl">__DBT_increase__</div><div id="stScUp" class="chips sc"></div>
+      <div class="sclbl">__DBT_decrease__</div><div id="stScDn" class="chips sc"></div>
+      <h3>__DBT_skill_cls__</h3><div id="stSkillCls" class="skcls"></div>
+      <h3>__DBT_stack_count__</h3><div id="stStack" class="statline"></div>
+      <h3>__DBT_feature_lbl__</h3><div id="stFeat" class="statline"></div>
+      <h3>__DBT_ga_count__</h3><div id="stGa" class="statline"></div>
+      <h3>__DBT_ga_levels__</h3><div id="stLevels"></div>
     </div>
   </aside>
 
   <main class="pickpane">
-    <h2>Legendary カード (<span>__LEG_TOTAL__</span>)
-      <button class="btn" id="toggleLeg" type="button">折りたたむ</button></h2>
+    <h2>__DBT_leg_cards__ (<span>__LEG_TOTAL__</span>)
+      <button class="btn" id="toggleLeg" type="button">__DBT_collapse__</button></h2>
     <div class="units" id="legUnits">
 __LEG_UNITS__
     </div>
-    <h2>メインカード (<span>__OTH_TOTAL__</span>)</h2>
+    <h2>__DBT_main_cards__ (<span>__OTH_TOTAL__</span>)</h2>
     <div class="units" id="othUnits">
 __OTH_UNITS__
     </div>
@@ -864,10 +909,10 @@ __OTH_UNITS__
   <div class="bd-box">
     <div class="bd-head">
       <span id="bdTitle"></span>
-      <button type="button" id="bdClose" title="閉じる">×</button>
+      <button type="button" id="bdClose" title="__DBT_close__">×</button>
     </div>
     <table class="bd-table">
-      <thead><tr><th>区域</th><th>係数</th><th>内訳</th></tr></thead>
+      <thead><tr><th>__DBT_bd_region__</th><th>__DBT_bd_coeff__</th><th>__DBT_bd_detail__</th></tr></thead>
       <tbody id="bdBody"></tbody>
     </table>
     <div class="bd-total" id="bdTotal"></div>
@@ -887,10 +932,7 @@ __OTH_UNITS__
   // Stat changes (individual): 14 stats x up/down = 28 items. Icon = BattleIconSkillImg{n}
   var SC_UP=[1,2,3,4,18,20,22,24,26,28,30,32,34,36];
   var SC_DN=[5,6,7,8,19,21,23,25,27,29,31,33,35,37];
-  var SC_NAME={1:'ATK↑',2:'DEF↑',3:'Sp.ATK↑',4:'Sp.DEF↑',5:'ATK↓',6:'DEF↓',7:'Sp.ATK↓',8:'Sp.DEF↓',
-    18:'火攻↑',19:'火攻↓',20:'火防↑',21:'火防↓',22:'水攻↑',23:'水攻↓',24:'水防↑',25:'水防↓',
-    26:'風攻↑',27:'風攻↓',28:'風防↑',29:'風防↓',30:'光攻↑',31:'光攻↓',32:'光防↑',33:'光防↓',
-    34:'闇攻↑',35:'闇攻↓',36:'闇防↑',37:'闇防↓'};
+  var SC_NAME=__DBJS_SC_NAME__;
   function scIcon(n){ return 'assets/Sprite/BattleIconSkillImg'+('00'+n).slice(-3)+'.png'; }
   function healIcon(){ return role==='F' ? scIcon(12) : 'assets/CardType7.png'; }
 
@@ -932,7 +974,7 @@ __OTH_UNITS__
     closePanels(null);
   });
 
-  // ---------- Role (前衛/後衛) ----------
+  // ---------- Role (__DBT_role_front__/__DBT_role_back__) ----------
   var role = 'F';
   function validTypes(){ return role==='F' ? [1,2,3,4] : [5,6,7]; }
   function isValidType(t){ return validTypes().indexOf(+t) !== -1; }
@@ -949,7 +991,7 @@ __OTH_UNITS__
   }
   function setRole(r){
     if(r===role){ return; }
-    if(deckCards().length && !confirm('前衛/後衛を切り替えると現在のデッキはクリアされます。よろしいですか？')){
+    if(deckCards().length && !confirm('__DBT_role_switch_confirm__')){
       return;
     }
     role=r;
@@ -998,7 +1040,7 @@ __OTH_UNITS__
       units[i].classList.toggle('hidden', !ok);
       if(ok) shown++;
     }
-    pcount.textContent=shown+' 件表示';
+    pcount.textContent=shown+' __DBT_shown_suffix__';
     updateBtns();
   }
   document.addEventListener('change', function(e){
@@ -1014,10 +1056,10 @@ __OTH_UNITS__
   });
   document.getElementById('toggleLeg').addEventListener('click', function(){
     var box=document.getElementById('legUnits'), hide=box.style.display!=='none';
-    box.style.display=hide?'none':''; this.textContent=hide?'展開する':'折りたたむ';
+    box.style.display=hide?'none':''; this.textContent=hide?'__DBT_expand__':'__DBT_collapse__';
   });
 
-  // ---------- Deck (5 Legendary + 20 メイン fixed slots, freely draggable to reorder) ----------
+  // ---------- Deck (5 Legendary + 20 __DBT_main__ fixed slots, freely draggable to reorder) ----------
   var LEG_MAX=5, MAIN_MAX=20;
   var legSlots=[], mainSlots=[];
   for(var _i=0;_i<LEG_MAX;_i++) legSlots.push(null);
@@ -1034,7 +1076,7 @@ __OTH_UNITS__
     if(hasUid(c.uid)){ if(!silent) flash(el); return false; }      // only one copy of the same card
     if(!isValidType(c.ct)){ return false; }
     var arr=slotsOf(c.leg), idx=arr.indexOf(null);
-    if(idx===-1){ if(!silent) alert(c.leg?'Legendary は最大 5 枚です':'メインカードは最大 20 枚です'); return false; }
+    if(idx===-1){ if(!silent) alert(c.leg?'__DBT_leg_max__':'__DBT_main_max__'); return false; }
     arr[idx]=c; renderDeck(); return true;
   }
   function removeUid(uid){
@@ -1074,7 +1116,7 @@ __OTH_UNITS__
           +'<img class="mark" src="'+c.mark+'" alt="">'
           +overlayHtml(c)
           +'</span>'
-          +'<span class="x" title="外す">×</span></div>'
+          +'<span class="x" title="__DBT_remove__">×</span></div>'
           +'<div class="slot-pme" data-uid="'+c.uid+'"></div></div>';
       } else {
         h+='<div class="slotcell"><div class="slot empty" data-grp="'+grp+'" data-idx="'+i+'">'
@@ -1093,7 +1135,7 @@ __OTH_UNITS__
     for(var i=0;i<units.length;i++){
       var inDeck=!!inUids[units[i].dataset.uid];
       units[i].classList.toggle('in-deck', inDeck);
-      var btn=units[i].querySelector('.u-add'); if(btn) btn.textContent=inDeck?'✓ 編成済':'＋ 追加';
+      var btn=units[i].querySelector('.u-add'); if(btn) btn.textContent=inDeck?'__DBT_in_deck__':'__DBT_add__';
     }
     renderStats(); syncCode();
     if(pmeOn()) recalcAll();
@@ -1106,7 +1148,7 @@ __OTH_UNITS__
     var slot=x.closest('.slot'); if(slot && slot.dataset.uid) removeUid(slot.dataset.uid);
   });
   document.getElementById('clearDeck').addEventListener('click', function(){
-    if(deckCards().length && confirm('デッキを全てクリアしますか？')){ clearSlots(); renderDeck(); }
+    if(deckCards().length && confirm('__DBT_clear_deck_confirm__')){ clearSlots(); renderDeck(); }
   });
 
   // Drag to reorder (within the same group only: drop into an empty slot / swap with the target slot)
@@ -1199,22 +1241,22 @@ __OTH_UNITS__
       .sort(function(a,b){ return b.n-a.n || a.sk1.length-b.sk1.length; });
     document.getElementById('stSkillCls').innerHTML = garr.length ? garr.map(function(g){
       var ic=g.sk1.map(function(p){ return '<img class="scicon" src="'+p+'" alt="">'; }).join('');
-      if(g.heal) ic+='<img class="scicon" src="'+healIcon()+'" alt="" title="HP回復">';
-      if(!ic) ic='<span class="muted">変動なし</span>';
+      if(g.heal) ic+='<img class="scicon" src="'+healIcon()+'" alt="" title="__DBT_hp_heal__">';
+      if(!ic) ic='<span class="muted">__DBT_no_change__</span>';
       return '<span class="chip">'+ic+' <b>'+g.n+'</b></span>';
     }).join('') : '<span class="empty-hint">—</span>';
 
     // stacks Mt/An/Ba
     document.getElementById('stStack').innerHTML = ['Mt','An','Ba','Et'].map(function(k){
-      return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' 枚 / <b>'+marks[k]+'</b> スタック</div>';
+      return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' __DBT_cards_unit__ / <b>'+marks[k]+'</b> __DBT_stack_title__</div>';
     }).join('');
     // EH/SD/MN/CT
     document.getElementById('stFeat').innerHTML = ['EH','SD','MN','CT'].map(function(k){
-      return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' 枚</div>';
+      return '<div><span class="k">'+k+'</span> '+(feat[k]||0)+' __DBT_cards_unit__</div>';
     }).join('');
     // five passives
     document.getElementById('stGa').innerHTML = ['dmgup','supup','healup','ptup','rangeup'].map(function(k){
-      return '<div><span class="k" style="min-width:120px">'+GA_LABEL[k]+'</span> '+(ga[k]||0)+' 枚</div>';
+      return '<div><span class="k" style="min-width:120px">'+GA_LABEL[k]+'</span> '+(ga[k]||0)+' __DBT_cards_unit__</div>';
     }).join('');
     // per-level (4 types, excluding 効果範囲+1)
     document.getElementById('stLevels').innerHTML = ['dmgup','supup','healup','ptup'].map(function(code){
@@ -1228,10 +1270,10 @@ __OTH_UNITS__
   }
 
   // ---------- Deck code (allb.game-db.tw deck-builder URL) ----------
-  // Format: base64( enc62(base-61) | LG... | メイン... | role ) carried in ?v=.
+  // Format: base64( enc62(base-61) | LG... | __DBT_main__... | role ) carried in ?v=.
   //   base     = min twdb id (cardMstId*10+variant) in the deck
   //   per card = enc62(id - base + 61) + "4" (trailing "4" is the limit-break digit)
-  //   role     = 前衛 0 / 後衛 1
+  //   role     = __DBT_role_front__ 0 / __DBT_role_back__ 1
   var B62='0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
   var TW_URL='https://allb.game-db.tw/deckbuilder?v=';
   function enc62(num){ num=Math.floor(num); if(num<=0) return '0';
@@ -1258,10 +1300,10 @@ __OTH_UNITS__
       if(m) target=atob(m[1].replace(/ /g,'+'));
       else if(str.indexOf('|')!==-1) target=str;       // pasted raw target text
       else target=atob(str.replace(/ /g,'+'));         // pasted raw base64
-    } catch(e){ alert('コードのデコードに失敗しました'); return; }
+    } catch(e){ alert('__DBT_decode_fail__'); return; }
     var parts=target.split('|');
     var base=dec62(parts[0])+61;
-    if(parts.length<4 || isNaN(base)){ alert('コード形式が不正です'); return; }
+    if(parts.length<4 || isNaN(base)){ alert('__DBT_bad_format__'); return; }
     var r=(parts[3].trim()==='0')?'F':'B';
     role=r; clearSlots();
     document.getElementById('roleF').classList.toggle('on', r==='F');
@@ -1283,14 +1325,14 @@ __OTH_UNITS__
     }
     place(parts[1]); place(parts[2]);
     renderDeck(); applyFilter();
-    if(miss) alert(miss+' 枚のカードが復元できませんでした（データ更新やタイプ不一致の可能性）');
+    if(miss) alert(miss+' __DBT_restore_fail__');
   }
   document.getElementById('loadCode').addEventListener('click', function(){ loadCode(document.getElementById('code').value); });
   document.getElementById('code').addEventListener('keydown', function(e){ if(e.key==='Enter') loadCode(this.value); });
   document.getElementById('copyCode').addEventListener('click', function(){
     var t=document.getElementById('code'); t.select();
     if(navigator.clipboard){ navigator.clipboard.writeText(t.value); } else { document.execCommand('copy'); }
-    var b=this, o=b.textContent; b.textContent='コピー済'; setTimeout(function(){ b.textContent=o; }, 1000);
+    var b=this, o=b.textContent; b.textContent='__DBT_copied__'; setTimeout(function(){ b.textContent=o; }, 1000);
   });
 
   // ---------- Utilities ----------
@@ -1308,7 +1350,7 @@ __OTH_UNITS__
   // adx selectors (theme turns the 1.05-based options into 1.055-based)
   var ADX_LABEL=['0.95','1','1.05','1.05×0.95'];
   (function(){
-    var row=document.getElementById('adxRow'), names=['火','水','風','光','闇'], h='';
+    var row=document.getElementById('adxRow'), names=__DBJS_ATTR_ARR__, h='';
     for(var a=1;a<=5;a++){
       h+='<label>'+names[a-1]+'<select id="adx'+a+'">';
       for(var c=0;c<4;c++) h+='<option value="'+c+'"'+(c===1?' selected':'')+'>'+ADX_LABEL[c]+'</option>';
@@ -1317,12 +1359,12 @@ __OTH_UNITS__
     row.innerHTML=h;
   })();
 
-  // costume main job — only the options for the current role (前衛 1-4 / 後衛 5-7)
+  // costume main job — only the options for the current role (__DBT_role_front__ 1-4 / __DBT_role_back__ 5-7)
   function rebuildCostJob(){
     var sel=document.getElementById('costJob');
-    var opts = role==='F' ? [[1,'通常単体'],[2,'通常範囲'],[3,'特殊単体'],[4,'特殊範囲']]
-                          : [[5,'支援'],[6,'妨害'],[7,'回復']];
-    var h='<option value="0">なし</option>';
+    var opts = role==='F' ? __DBJS_COSTUME_F__
+                          : __DBJS_COSTUME_B__;
+    var h='<option value="0">__DBT_none__</option>';
     opts.forEach(function(o){ h+='<option value="'+o[0]+'">'+o[1]+'</option>'; });
     sel.innerHTML=h;
   }
@@ -1343,7 +1385,7 @@ __OTH_UNITS__
         +'<img class="mark" src="assets/markers/mk_tactics.png" alt="">'
         +'</span></button>';
     }
-    box.innerHTML = h || '<span class="muted">— なし —</span>';
+    box.innerHTML = h || '<span class="muted">__DBT_none_dash__</span>';
   }
   buildTacIcons('tacMyAttr', PME_TACTICS.my_attr);
   buildTacIcons('tacMyRate', PME_TACTICS.my_rate);
@@ -1373,7 +1415,7 @@ __OTH_UNITS__
         enRate=selTac('tacEnRate',PME_TACTICS.en_rate), enEff=selTac('tacEnEff',PME_TACTICS.en_eff);
 
     // tactics aggregates (same-effect values additive per 11.1; activation rate multiplicative)
-    // 特効 matches by card TYPE (支援/妨害効果 = the skill effect of 支援/妨害 cards), keyed by cardType
+    // __DBT_eff__ matches by card TYPE (支援/妨害効果 = the skill effect of 支援/妨害 cards), keyed by cardType
     var attrBoost={1:0,2:0,3:0,4:0,5:0}, shieldDown={1:0,2:0,3:0,4:0,5:0};
     var effUp={}, effDown={};   // keyed by targetCardType
     var disadv=0, dmgRedP=0, dmgRedM=0, myRateUp=0, enRateDown=0, activeTypes={};
@@ -1432,8 +1474,8 @@ __OTH_UNITS__
         var mag=(e.m+addMag)*(1+tm);
         var stack=e.k==='dmg'?(sMt?1.2:1):(e.k==='heal'?(sEt?1.3:1):(sAn?1.3:1));
         var pdet=[], ldet=[], pUp=passUP(e.k,pdet), lUp=legUP(at,e.k,e.t,ldet), up=1+pUp+lUp;
-        // オーダー加成: attribute boost (all kinds) + 特効 by card type − 相手 特効 by card type;
-        // attribute shield skips 回復; damage shield + 劣勢 only hit damage
+        // __DBT_bd_order__: attribute boost (all kinds) + __DBT_eff__ by card type − 相手 __DBT_eff__ by card type;
+        // attribute shield skips 回復; damage shield + __DBT_bd_disadv__ only hit damage
         var cmdAttr=attrB, cmdEffUp=effUp[ct]||0, cmdEffDown=effDown[ct]||0,
             cmdShB=(e.k!=='heal')?shB:0, cmdDmgRed=0, cmdDis=0;
         if(e.k==='dmg'){ cmdDmgRed=(e.t===2?dmgRedM:dmgRedP); cmdDis=disadv; }
@@ -1442,23 +1484,23 @@ __OTH_UNITS__
         var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
         // store the per-region breakdown for the click-to-explain popup
         var R=[
-          {n:'数値区', v:1, note:'固定 (出力は変換率)'},
-          {n:'GVG補正', v:e.g, note:e.k==='dmg'?'ダメージ → 0.1':'非ダメージ → 1'},
-          {n:'技能系数', v:mag, note:magNote(e.m, addMag, tm)},
-          {n:'技能等級', v:1.5, note:'固定 (Lv.最大)'},
-          {n:'得意', v:cos, note:cos>1?('一致 (cardType '+ct+')'):'不一致 → 1'},
-          {n:'恩惠', v:1.1, note:'固定'},
-          {n:'スタック', v:stack, note:stackNote(e.k,sMt,sAn,sEt)},
-          {n:'CHARM', v:charmM, note:'属性'+ATTR_JP[at]+' +'+(charm[at]||0)+'%'},
+          {n:'__DBT_bd_numeric__', v:1, note:'__DBT_bd_fixed_conv__'},
+          {n:'__DBT_bd_gvg__', v:e.g, note:e.k==='dmg'?'__DBT_bd_dmg01__':'__DBT_bd_nondmg1__'},
+          {n:'__DBT_bd_skillcoef__', v:mag, note:magNote(e.m, addMag, tm)},
+          {n:'__DBT_bd_skillgrade__', v:1.5, note:'__DBT_bd_fixed_lvmax__'},
+          {n:'__DBT_specialty__', v:cos, note:cos>1?('__DBT_bd_match_open__'+ct+')'):'__DBT_bd_nomatch1__'},
+          {n:'__DBT_bd_grace__', v:1.1, note:'__DBT_bd_fixed__'},
+          {n:'__DBT_stack_title__', v:stack, note:stackNote(e.k,sMt,sAn,sEt)},
+          {n:'CHARM', v:charmM, note:'__DBT_attr_lbl__'+ATTR_JP[at]+' +'+(charm[at]||0)+'%'},
           {n:'ADX', v:adxM, note:adxNote(at, e.k)},
-          {n:'テーマ', v:themeM, note:theme[at]?('属性'+ATTR_JP[at]+' テーマ一致 → 1.1'):'不一致 → 1'},
-          {n:'UP区', v:up, note:upNote(pdet,ldet)},
-          {n:'特効', v:ehMul, note:ehct?('ON: EH×'+(c.calc.eh>0?c.calc.eh:1)+' × CT×'+(c.calc.ct>0?c.calc.ct:1)):'OFF → 1'},
-          {n:'オーダー加成', v:cmd, note:cmdNote(cmdAttr,cmdEffUp,cmdEffDown,cmdShB,cmdDmgRed,cmdDis)},
-          {n:'乱数', v:e.n, note:(e.k==='dmg'||e.k==='heal')?'ダメージ/回復 → 0.95':'非ダメージ → 1'}
+          {n:'__DBT_theme__', v:themeM, note:theme[at]?('__DBT_attr_lbl__'+ATTR_JP[at]+'__DBT_bd_theme_match__'):'__DBT_bd_nomatch1__'},
+          {n:'__DBT_bd_up__', v:up, note:upNote(pdet,ldet)},
+          {n:'__DBT_eff__', v:ehMul, note:ehct?('ON: EH×'+(c.calc.eh>0?c.calc.eh:1)+' × CT×'+(c.calc.ct>0?c.calc.ct:1)):'OFF → 1'},
+          {n:'__DBT_bd_order__', v:cmd, note:cmdNote(cmdAttr,cmdEffUp,cmdEffDown,cmdShB,cmdDmgRed,cmdDis)},
+          {n:'__DBT_bd_random__', v:e.n, note:(e.k==='dmg'||e.k==='heal')?'__DBT_bd_dmgheal095__':'__DBT_bd_nondmg1__'}
         ];
         BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate};
-        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="クリックで計算内訳を表示">'+pesc(e.l)+' <b>'+rate.toFixed(3)+'</b></span>';
+        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+rate.toFixed(3)+'</b></span>';
       });
       var box=document.querySelector('.slot-pme[data-uid="'+c.uid+'"]');
       if(box) box.innerHTML=parts;
@@ -1467,12 +1509,12 @@ __OTH_UNITS__
 
   // ----- breakdown popup (click a 牌効 chip to see how the number was produced) -----
   var BREAKDOWN={};
-  var ATTR_JP={1:'火',2:'水',3:'風',4:'光',5:'闇'};
+  var ATTR_JP=__DBJS_ATTR_MAP__;
   function fmtNum(v){ var s=(Math.round(v*1e6)/1e6).toString(); return s; }
   function magNote(base, add, tm){
-    var s='基礎 '+fmtNum(base);
-    if(add) s+=' + 指令 '+fmtNum(add);
-    if(tm) s+=' ×(1+チャージ '+fmtNum(tm)+')';
+    var s='__DBT_bd_base_word__ '+fmtNum(base);
+    if(add) s+=' + __DBT_bd_command_word__ '+fmtNum(add);
+    if(tm) s+=' ×(1+__DBT_bd_charge_word__ '+fmtNum(tm)+')';
     return s;
   }
   function stackNote(kind,sMt,sAn,sEt){
@@ -1481,29 +1523,29 @@ __OTH_UNITS__
     return sAn?'An ON → 1.3':'An OFF → 1';
   }
   function adxNote(at, kind){
-    var s='ADX選択 #'+adxIdx(at)+' (属性'+ATTR_JP[at]+(themeSel(at)?' テーマ有':'')+')';
-    if((kind!=='dmg'&&kind!=='debuff')&&(adxIdx(at)===0||adxIdx(at)===3)) s+=' / 支援·回復は0.95を除外';
+    var s='__DBT_bd_adx_select__'+adxIdx(at)+' (__DBT_attr_lbl__'+ATTR_JP[at]+(themeSel(at)?'__DBT_bd_theme_has__':'')+')';
+    if((kind!=='dmg'&&kind!=='debuff')&&(adxIdx(at)===0||adxIdx(at)===3)) s+='__DBT_bd_excl095__';
     return s;
   }
   function adxIdx(at){ return +document.getElementById('adx'+at).value; }
   function themeSel(at){ return document.getElementById('theme'+at).checked; }
-  var UP_JP={dmg:'ダメージUP',heal:'回復UP',buff:'支援UP'};
+  var UP_JP=__DBJS_UP_JP__;
   function upNote(pdet,ldet){
     var lines=['1'];
-    pdet.forEach(function(p){ lines.push('+ '+(UP_JP[p.kind]||p.kind)+' 係数'+fmtNum(p.coeff)+'×1.5×発動'+fmtNum(p.rate)+' = '+fmtNum(p.add)); });
+    pdet.forEach(function(p){ lines.push('+ '+(UP_JP[p.kind]||p.kind)+' __DBT_bd_coeff__'+fmtNum(p.coeff)+'×1.5×__DBT_bd_proc_word__'+fmtNum(p.rate)+' = '+fmtNum(p.add)); });
     ldet.forEach(function(l){ lines.push('+ Legendary '+fmtNum(l.p)); });
-    if(lines.length===1) lines.push('(UP源なし)');
+    if(lines.length===1) lines.push('__DBT_bd_no_up__');
     return lines.join('\\n');
   }
   function cmdNote(attr,effUp,effDown,shB,dmgRed,dis){
     var lines=['1'];
-    if(attr) lines.push('+ 属性 '+fmtNum(attr));
-    if(effUp) lines.push('+ 味方特効 '+fmtNum(effUp));
-    if(effDown) lines.push('− 相手特効 '+fmtNum(effDown));
-    if(shB) lines.push('− 属性盾 '+fmtNum(shB));
-    if(dmgRed) lines.push('− ダメージ盾 '+fmtNum(dmgRed));
-    if(dis) lines.push('+ 劣勢 '+fmtNum(dis));
-    if(lines.length===1) lines.push('(オーダー効果なし)');
+    if(attr) lines.push('+ __DBT_attr_lbl__ '+fmtNum(attr));
+    if(effUp) lines.push('+ __DBT_bd_ally_eff__ '+fmtNum(effUp));
+    if(effDown) lines.push('− __DBT_bd_enemy_eff__ '+fmtNum(effDown));
+    if(shB) lines.push('− __DBT_bd_attr_shield__ '+fmtNum(shB));
+    if(dmgRed) lines.push('− __DBT_bd_dmg_shield__ '+fmtNum(dmgRed));
+    if(dis) lines.push('+ __DBT_bd_disadv__ '+fmtNum(dis));
+    if(lines.length===1) lines.push('__DBT_bd_no_order__');
     return lines.join('\\n');
   }
   function showBreakdown(key){
@@ -1513,10 +1555,10 @@ __OTH_UNITS__
       rows+='<tr><td class="bn">'+pesc(r.n)+'</td><td class="bv">×'+fmtNum(r.v)+'</td>'
            +'<td class="bd">'+pesc(r.note).replace(/\\n/g,'<br>')+'</td></tr>';
     });
-    var kindJp={dmg:'ダメージ',heal:'回復',buff:'支援',debuff:'妨害'}[bd.kind]||bd.kind;
+    var kindJp=__DBJS_KIND_JP__[bd.kind]||bd.kind;
     document.getElementById('bdTitle').innerHTML=pesc(bd.card)+' <span class="bk k-'+bd.kind+'">'+pesc(bd.label)+' ('+kindJp+')</span>';
     document.getElementById('bdBody').innerHTML=rows;
-    document.getElementById('bdTotal').textContent='スキル効果量 = '+bd.rate.toFixed(4);
+    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+bd.rate.toFixed(4);
     document.getElementById('bdModal').classList.add('open');
   }
   function hideBreakdown(){ document.getElementById('bdModal').classList.remove('open'); }
@@ -1529,7 +1571,7 @@ __OTH_UNITS__
   document.getElementById('pmeToggle').addEventListener('click', function(){
     var on=!deckpane.classList.contains('pme-on');
     deckpane.classList.toggle('pme-on', on);
-    this.textContent='スキル効果量シミュ '+(on?'ON':'OFF');
+    this.textContent='__DBT_sim_label__ '+(on?'ON':'OFF');
     this.classList.toggle('active', on);
     if(on) recalcAll();
   });

@@ -132,17 +132,11 @@ def ensure_output_dir():
 
 
 def asset_url_prefix():
-    rel = os.path.relpath(PROJECT_ROOT, OUTPUT_DIR)
-    if rel == ".":
-        return ""
-    return rel.replace(os.sep, "/") + "/"
+    return os.path.relpath(ASSETS_DIR, OUTPUT_DIR).replace(os.sep, "/") + "/"
 
 
 def relocate_asset_urls(html_text):
-    rel = os.path.relpath(PROJECT_ROOT, OUTPUT_DIR).replace(os.sep, "/")
-    prefix = "" if rel == "." else rel + "/"
-    target = prefix + "data/assets/"
-    for q in ('"', "'"):
+    target = asset_url_prefix()
+    for q in ('"', "'", "("):
         html_text = html_text.replace(q + "assets/", q + target)
-        
     return html_text
