@@ -8,8 +8,8 @@ import json as _json
 # ===========================================================================
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 METHOD_DIR = os.path.join(PROJECT_ROOT, "method")
-ASSETS_DIR = os.path.join(PROJECT_ROOT, "assets")
-LANGUAGE_DIR = os.path.join(PROJECT_ROOT, "language")
+ASSETS_DIR = os.path.join(PROJECT_ROOT, "data/assets")
+LANGUAGE_DIR = os.path.join(PROJECT_ROOT, "data/language")
 OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")   # generated *.html go here
 
 # Generated page files
@@ -21,11 +21,11 @@ DECK_BUILDER_OUT = os.path.join(OUTPUT_DIR, "deck_builder.html")
 # Page language:  "cn" | "jp" | "en"   (files: ./language/<code>.json)
 # ===========================================================================
 LANGUAGE = (os.environ.get("ARAYA_LANG", "").strip().lower() or "cn")
-LANGUAGE_FALLBACK = "jp"           
+LANGUAGE_FALLBACK = "cn"           
 
 # ===========================================================================
 MASTERDATA_DB_DIR = os.path.join(os.path.dirname(PROJECT_ROOT), "A.RA.YA", "MasterdataBase")
-MASTERDATA_CACHE_DIR = os.path.join(PROJECT_ROOT, "masterdata")
+MASTERDATA_CACHE_DIR = os.path.join(PROJECT_ROOT, "data/masterdata")
 
 # ===========================================================================
 GITHUB_OWNER = "LaTlcia"
