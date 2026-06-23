@@ -121,9 +121,7 @@ def html_lang():
     return t("_meta.html_lang", {"cn": "zh", "jp": "ja", "en": "en"}.get(LANGUAGE, "en"))
 
 
-# ===========================================================================
-# helpers
-# ===========================================================================
+# ===================helpers============================================
 def ensure_output_dir():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     return OUTPUT_DIR
@@ -137,9 +135,10 @@ def asset_url_prefix():
 
 
 def relocate_asset_urls(html_text):
-    prefix = asset_url_prefix()
-    if not prefix:
-        return html_text
-    for q in ('"', "'", "("):
-        html_text = html_text.replace(q + "assets/", q + prefix + "assets/")
+    rel = os.path.relpath(PROJECT_ROOT, OUTPUT_DIR).replace(os.sep, "/")
+    prefix = "" if rel == "." else rel + "/"
+    
+    target = prefix + "data/assets/"
+    for q in ('"', "'"):
+        html_text = html_text.replace(q + "assets/", q + target)
     return html_text
