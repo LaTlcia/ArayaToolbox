@@ -54,8 +54,12 @@ ASSETS_REMOTE_BASE = "https://allb.tqlwsl.moe/"
 ASSETS_UPDATE_DIR = ASSETS_REMOTE_BASE + "update/"
 ASSETS_LOCAL_DIR = os.path.join(ASSETS_DIR, "remote")
 ASSETS_STATE_FILE = os.path.join(ASSETS_LOCAL_DIR, ".sync_state.json")
+
 SPRITE_DIR = os.path.join(ASSETS_DIR, "Sprite")
 MARKER_DIR = os.path.join(ASSETS_DIR, "markers")
+
+SKILL_ICON = os.path.join(SPRITE_DIR, "BattleIconSkillImg%03d.png")
+TGT_ICON = os.path.join(SPRITE_DIR, "BattleIconTargetNumberImg%03d%03d.png")
 
 ASSET_CARD_ICON_REMOTE = "Image/CardIcon/S/CardIconS0%s.png"
 ASSET_TACTICS_ICON_REMOTE = "Image/TacticsIcon/S/TacticsIconS%03d.png"
@@ -137,8 +141,8 @@ def asset_url_prefix():
 def relocate_asset_urls(html_text):
     rel = os.path.relpath(PROJECT_ROOT, OUTPUT_DIR).replace(os.sep, "/")
     prefix = "" if rel == "." else rel + "/"
-    
     target = prefix + "data/assets/"
     for q in ('"', "'"):
         html_text = html_text.replace(q + "assets/", q + target)
+        
     return html_text

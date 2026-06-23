@@ -47,7 +47,8 @@ import skill_calc as sc
 import generate_tactics_list as gtl
 
 OUT = config.DECK_BUILDER_OUT
-
+SKILL_ICON = config.SKILL_ICON
+TGT_ICON = config.TGT_ICON
 # ---------------------------------------------------------------------------
 # Passive (GvgAuto) level / mark parsing
 # ---------------------------------------------------------------------------
@@ -106,12 +107,6 @@ def stack_count(gvg_skill, phrase_re):
         total += int(k.group(1)) if k else 1
     return total
 
-
-# ---------------------------------------------------------------------------
-# GvgSkill -> battle icons (target count / stat changes / special effects / marks), deck builder only
-# ---------------------------------------------------------------------------
-SKILL_ICON = "assets/Sprite/BattleIconSkillImg%03d.png"
-TGT_ICON = "assets/Sprite/BattleIconTargetNumberImg%03d%03d.png"  # (max, min)
 
 # Four main stats (phys atk/def, mag atk/def) single icons: up/down
 MAIN_UP = {"pa": 1, "pd": 2, "ma": 3, "md": 4}
