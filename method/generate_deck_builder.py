@@ -736,8 +736,6 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .pme-total .pt-k { display:inline-block; font-size:12px; padding:1px 6px; border-radius:3px;
                      font-variant-numeric:tabular-nums; }
   .pme-total .pt-k b { font-weight:700; }
-  .pme-total .pt-grand { margin-top:5px; font-size:13px; color:#222; font-variant-numeric:tabular-nums; }
-  .pme-total .pt-grand b { font-weight:700; font-size:14px; }
   /* deck slot cell = the square slot + its 牌効 results below (only while the calculator is on) */
   .slotcell { display:flex; flex-direction:column; align-items:stretch; }
   .slot-pme { display:none; margin-top:2px; }
@@ -1471,7 +1469,7 @@ __OTH_UNITS__
     BREAKDOWN={};
     var allp=document.querySelectorAll('.slot-pme');
     for(var i=0;i<allp.length;i++) allp[i].innerHTML='';
-    var totK={dmg:0,heal:0,buff:0,debuff:0}, totAll=0, anyE=false;
+    var totL={}, nseen=0, anyE=false;
     deck.forEach(function(c){ if(!c.calc||!c.calc.e.length) return;
       var at=c.calc.a, ct=c.calc.c;
       var trig=(c.calc.ut||[]).some(function(t){ return activeTypes[t]; });
@@ -1493,7 +1491,7 @@ __OTH_UNITS__
         var cmd=1+cmdAttr+cmdEffUp-cmdEffDown-cmdShB-cmdDmgRed+cmdDis;
         var adxM=adxVal(at, e.k);   // 0.95 component is damage/debuff only
         var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
-        totK[e.k]=(totK[e.k]||0)+rate; totAll+=rate; anyE=true;
+        if(!totL[e.l]){ totL[e.l]={v:0,k:e.k,i:nseen++}; } totL[e.l].v+=rate; anyE=true;
         // store the per-region breakdown for the click-to-explain popup
         var R=[
           {n:'__DBT_bd_numeric__', v:1, note:'__DBT_bd_fixed_conv__'},
@@ -1521,12 +1519,13 @@ __OTH_UNITS__
     if(tb){
       if(!anyE){ tb.innerHTML='<span class="muted">__DBT_none_dash__</span>'; }
       else {
+        var KP={dmg:0,heal:1,buff:2,debuff:3};
+        var labels=Object.keys(totL).sort(function(x,y){ return (KP[totL[x].k]-KP[totL[y].k])||(totL[x].i-totL[y].i); });
         var rows='';
-        ['dmg','heal','buff','debuff'].forEach(function(k){
-          if(totK[k]>0) rows+='<span class="pt-k k-'+k+'">'+pesc(KIND_LBL[k]||k)+' <b>'+totK[k].toFixed(3)+'</b></span>';
+        labels.forEach(function(lbl){ var o=totL[lbl];
+          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+o.v.toFixed(3)+'</b></span>';
         });
-        tb.innerHTML='<div class="pt-h">__DBT_total_effect__</div><div class="pt-row">'+rows+'</div>'
-                    +'<div class="pt-grand">__DBT_grand_total__ <b>'+totAll.toFixed(3)+'</b></div>';
+        tb.innerHTML='<div class="pt-h">__DBT_total_effect__</div><div class="pt-row">'+rows+'</div>';
       }
     }
   }
@@ -1534,7 +1533,6 @@ __OTH_UNITS__
   // ----- breakdown popup (click a 牌効 chip to see how the number was produced) -----
   var BREAKDOWN={};
   var ATTR_JP=__DBJS_ATTR_MAP__;
-  var KIND_LBL=__DBJS_KIND_JP__;
   function fmtNum(v){ var s=(Math.round(v*1e6)/1e6).toString(); return s; }
   function magNote(base, add, tm){
     var s='__DBT_bd_base_word__ '+fmtNum(base);
