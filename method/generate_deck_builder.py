@@ -284,8 +284,16 @@ def build_calc(e, gvg, ga):
     """Static 牌効 data for one card (the live formula runs in JS). See skill_calc.py.
     Compact keys keep the per-unit data-calc blob small."""
     se = sc.skill_effects(gvg)
+    desc = (gvg.get("desc", "") if gvg else "") or ""
+    tlo = thi = 1
+    _m = RE_TAI.search(desc)
+    if _m:
+        _lo = int(_m.group(1)); _hi = int(_m.group(2)) if _m.group(2) else _lo
+        if 1 <= _lo and _hi <= 4:
+            tlo, thi = _lo, _hi
     return {
         "a": e["attribute"], "c": e["cardType"], "r": 0 if e["cardType"] <= 4 else 1,
+        "tn": [tlo, thi], "sd": ("SD" in e["fg"]),
         "e": [{"k": x["kind"], "l": x["label"], "m": x["mag"],
                "g": x["gvg"], "n": x["rand"], "t": x["atk"]} for x in se["effs"]],
         "am": se["addMag"], "ut": se["upT"], "tm": se["timeMax"], "eh": se["eh"], "ct": se["ct"],
@@ -870,6 +878,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="pme-blk"><b>__DBT_specialty__</b>
           <div class="pme-attrs"><label><select id="costJob"></select></label></div>
         </div>
+        <div class="pme-blk"><b>__DBT_target_lbl__</b>
+          <div class="pme-attrs"><label class="chk"><input type="checkbox" id="tgtMod"> __DBT_tgt_mod__</label></div>
+        </div>
         <div class="pme-blk"><b>__DBT_stack_title__</b>
           <div class="pme-attrs">
             <label class="chk"><input type="checkbox" id="sMt"> __DBT_stack_mt__</label>
@@ -878,7 +889,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
         </div>
         <div class="pme-blk"><b>__DBT_eff__</b>
-          <div class="pme-attrs"><label class="chk"><input type="checkbox" id="ehct"> EH/CT </label></div>
+          <div class="pme-attrs"><label class="chk"><input type="checkbox" id="ehct"> EH/CT </label><label class="chk"><input type="checkbox" id="sSD"> SD</label></div>
         </div>
       </div>
 
@@ -1431,10 +1442,10 @@ __OTH_UNITS__
   function pchk(id){ return document.getElementById(id).checked; }
 
   var PBASE=[0.15,0.225,0.30];   // passive activation rate by "+" count (0/1/2)
-  var MASTER_KEY={sMt:'mt', sAn:'an', sEt:'et', ehct:'eh'};
-  var MASTER_ID={mt:'sMt', an:'sAn', et:'sEt', eh:'ehct'};
-  var simAll={mt:false, an:false, et:false, eh:false};
-  var simSel={mt:{}, an:{}, et:{}, eh:{}};
+  var MASTER_KEY={sMt:'mt', sAn:'an', sEt:'et', ehct:'eh', sSD:'sd'};
+  var MASTER_ID={mt:'sMt', an:'sAn', et:'sEt', eh:'ehct', sd:'sSD'};
+  var simAll={mt:false, an:false, et:false, eh:false, sd:false};
+  var simSel={mt:{}, an:{}, et:{}, eh:{}, sd:{}};
   function simGet(k,uid){ var m=simSel[k]; return (uid in m)?m[uid]:simAll[k]; }
   function updateMasters(){
     var cards=deckCards();
@@ -1450,10 +1461,10 @@ __OTH_UNITS__
     var box=document.getElementById('simCards'); if(!box) return;
     var cards=deckCards();
     if(!cards.length){ box.innerHTML='<span class="muted">__DBT_none_dash__</span>'; return; }
-    var h='<table class="simtbl"><thead><tr><th></th><th>Mt</th><th>An</th><th>Et</th><th>EH/CT</th></tr></thead><tbody>';
+    var h='<table class="simtbl"><thead><tr><th></th><th>Mt</th><th>An</th><th>Et</th><th>EH/CT</th><th>SD</th></tr></thead><tbody>';
     cards.forEach(function(c){
       h+='<tr data-uid="'+c.uid+'"><td class="nm"><img src="'+iconUrl(c.uid)+'" alt="">'+pesc(c.name)+'</td>';
-      ['mt','an','et','eh'].forEach(function(k){
+      ['mt','an','et','eh','sd'].forEach(function(k){
         h+='<td><input type="checkbox" class="simchk" data-k="'+k+'" data-uid="'+c.uid+'"'+(simGet(k,c.uid)?' checked':'')+'></td>';
       });
       h+='</tr>';
@@ -1464,6 +1475,7 @@ __OTH_UNITS__
   function recalcAll(){
     if(!pmeOn()) return;
     var deck=deckCards(), a;
+    var tgtMod=pchk('tgtMod');
     var charm={},adx={},theme={};
     for(a=1;a<=5;a++){ charm[a]=pnum('charm'+a); adx[a]=+document.getElementById('adx'+a).value; theme[a]=pchk('theme'+a); }
     var costJob=+document.getElementById('costJob').value;
@@ -1522,6 +1534,8 @@ __OTH_UNITS__
     deck.forEach(function(c){ if(!c.calc||!c.calc.e.length) return;
       var at=c.calc.a, ct=c.calc.c;
       var sMt=simGet('mt',c.uid), sAn=simGet('an',c.uid), sEt=simGet('et',c.uid), ehct=simGet('eh',c.uid);
+      var sSD=simGet('sd',c.uid), tlo=1, thi=1;
+      if(tgtMod && c.calc.tn){ thi=c.calc.tn[1]; tlo=(c.calc.sd&&sSD)?c.calc.tn[1]:c.calc.tn[0]; }
       var trig=(c.calc.ut||[]).some(function(t){ return activeTypes[t]; });
       var cos=(costJob&&costJob===ct)?1.15:1;
       var charmM=1+(charm[at]||0)/100, themeM=theme[at]?1.1:1;
@@ -1541,7 +1555,8 @@ __OTH_UNITS__
         var cmd=1+cmdAttr+cmdEffUp-cmdEffDown-cmdShB-cmdDmgRed+cmdDis;
         var adxM=adxVal(at, e.k);   // 0.95 component is damage/debuff only
         var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
-        if(!totL[e.l]){ totL[e.l]={v:0,k:e.k,i:nseen++}; } totL[e.l].v+=rate; anyE=true;
+        var vlo=rate*tlo, vhi=rate*thi;
+        if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,k:e.k,i:nseen++}; } totL[e.l].lo+=vlo; totL[e.l].hi+=vhi; anyE=true;
         // store the per-region breakdown for the click-to-explain popup
         var R=[
           {n:'__DBT_bd_numeric__', v:1, note:'__DBT_bd_fixed_conv__'},
@@ -1559,8 +1574,8 @@ __OTH_UNITS__
           {n:'__DBT_bd_order__', v:cmd, note:cmdNote(cmdAttr,cmdEffUp,cmdEffDown,cmdShB,cmdDmgRed,cmdDis)},
           {n:'__DBT_bd_random__', v:e.n, note:(e.k==='dmg'||e.k==='heal')?'__DBT_bd_dmgheal095__':'__DBT_bd_nondmg1__'}
         ];
-        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate};
-        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+rate.toFixed(3)+'</b></span>';
+        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate, tlo:tlo, thi:thi, sd:(c.calc.sd&&sSD)};
+        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+fmtRange(vlo,vhi)+'</b></span>';
       });
       var box=document.querySelector('.slot-pme[data-uid="'+c.uid+'"]');
       if(box) box.innerHTML=parts;
@@ -1573,7 +1588,7 @@ __OTH_UNITS__
         var labels=Object.keys(totL).sort(function(x,y){ return (KP[totL[x].k]-KP[totL[y].k])||(totL[x].i-totL[y].i); });
         var rows='';
         labels.forEach(function(lbl){ var o=totL[lbl];
-          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+o.v.toFixed(3)+'</b></span>';
+          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+fmtRange(o.lo,o.hi)+'</b></span>';
         });
         tb.innerHTML='<div class="pt-h">__DBT_total_effect__</div><div class="pt-row">'+rows+'</div>';
       }
@@ -1584,6 +1599,7 @@ __OTH_UNITS__
   var BREAKDOWN={};
   var ATTR_JP=__DBJS_ATTR_MAP__;
   function fmtNum(v){ var s=(Math.round(v*1e6)/1e6).toString(); return s; }
+  function fmtRange(lo, hi){ var a=lo.toFixed(3), b=hi.toFixed(3); return (a===b)?a:a+'~'+b; }
   function magNote(base, add, tm){
     var s='__DBT_bd_base_word__ '+fmtNum(base);
     if(add) s+=' + __DBT_bd_command_word__ '+fmtNum(add);
@@ -1628,10 +1644,16 @@ __OTH_UNITS__
       rows+='<tr><td class="bn">'+pesc(r.n)+'</td><td class="bv">×'+fmtNum(r.v)+'</td>'
            +'<td class="bd">'+pesc(r.note).replace(/\\n/g,'<br>')+'</td></tr>';
     });
+    var tl=bd.tlo||1, th=bd.thi||1;
+    if(tl!==1 || th!==1){
+      var tv=(tl===th)?('×'+tl):('×'+tl+'~'+th);
+      rows+='<tr><td class="bn">__DBT_target_lbl__</td><td class="bv">'+tv+'</td><td class="bd">'+(bd.sd?'SD':'')+'</td></tr>';
+    }
     var kindJp=__DBJS_KIND_JP__[bd.kind]||bd.kind;
     document.getElementById('bdTitle').innerHTML=pesc(bd.card)+' <span class="bk k-'+bd.kind+'">'+pesc(bd.label)+' ('+kindJp+')</span>';
     document.getElementById('bdBody').innerHTML=rows;
-    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+bd.rate.toFixed(4);
+    var blo=(bd.rate*tl).toFixed(4), bhi=(bd.rate*th).toFixed(4);
+    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+((blo===bhi)?blo:blo+'~'+bhi);
     document.getElementById('bdModal').classList.add('open');
   }
   function hideBreakdown(){ document.getElementById('bdModal').classList.remove('open'); }

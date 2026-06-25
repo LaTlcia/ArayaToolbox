@@ -258,7 +258,8 @@
       "def_suffix": "防",
       "total_effect": "总效果量",
       "grand_total": "总计",
-      "per_card": "按卡设置"
+      "per_card": "按卡设置",
+      "tgt_mod": "目标数修正"
     }
   }
 }
