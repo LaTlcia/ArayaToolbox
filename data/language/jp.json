@@ -258,7 +258,9 @@
       "def_suffix": "防",
       "total_effect": "総効果量",
       "grand_total": "総合計",
-      "per_card": "カード別"
+      "per_card": "メモリア別",
+      "tgt_mod": "目標数補正",
+      "exp_mode": "期待効果量"
     }
   }
 }

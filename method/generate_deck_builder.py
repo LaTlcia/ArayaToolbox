@@ -280,12 +280,31 @@ def passive_dot(e):
 # ---------------------------------------------------------------------------
 # Build picker units
 # ---------------------------------------------------------------------------
+def ko_plus(ga):
+    """If the GvgAuto skill grants 効果範囲+1 (target range +1), return its activation-tier
+    '+' count (for PBASE); otherwise None."""
+    if not ga:
+        return None
+    name = ga.get("name", "") or ""
+    if "効果範囲+1" not in name:
+        return None
+    return sc.passive_plus(ga)
+
+
 def build_calc(e, gvg, ga):
     """Static 牌効 data for one card (the live formula runs in JS). See skill_calc.py.
     Compact keys keep the per-unit data-calc blob small."""
     se = sc.skill_effects(gvg)
+    desc = (gvg.get("desc", "") if gvg else "") or ""
+    tn = None
+    _m = RE_TAI.search(desc)
+    if _m:
+        _lo = int(_m.group(1)); _hi = int(_m.group(2)) if _m.group(2) else _lo
+        if 1 <= _lo and _hi <= 4:
+            tn = [_lo, _hi]
     return {
         "a": e["attribute"], "c": e["cardType"], "r": 0 if e["cardType"] <= 4 else 1,
+        "tn": tn, "sd": ("SD" in e["fg"]), "ko": ko_plus(ga),
         "e": [{"k": x["kind"], "l": x["label"], "m": x["mag"],
                "g": x["gvg"], "n": x["rand"], "t": x["atk"]} for x in se["effs"]],
         "am": se["addMag"], "ut": se["upT"], "tm": se["timeMax"], "eh": se["eh"], "ct": se["ct"],
@@ -735,6 +754,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                  pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
   /* per-effect 牌効 chips (under each deck card) */
   .pme-eff { display:inline-block; font-size:10px; margin:1px 2px 0 0; padding:0 3px; border-radius:3px;
+             max-width:100%; box-sizing:border-box; overflow:hidden;
              font-variant-numeric:tabular-nums; line-height:1.5; cursor:pointer; }
   .pme-eff:hover { outline:1px solid rgba(0,0,0,.35); }
   .pme-eff b { font-weight:700; }
@@ -870,6 +890,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         <div class="pme-blk"><b>__DBT_specialty__</b>
           <div class="pme-attrs"><label><select id="costJob"></select></label></div>
         </div>
+        <div class="pme-blk"><b>__DBT_target_lbl__</b>
+          <div class="pme-attrs"><label class="chk"><input type="checkbox" id="tgtMod"> __DBT_tgt_mod__</label><label class="chk"><input type="checkbox" id="expMode"> __DBT_exp_mode__</label></div>
+        </div>
         <div class="pme-blk"><b>__DBT_stack_title__</b>
           <div class="pme-attrs">
             <label class="chk"><input type="checkbox" id="sMt"> __DBT_stack_mt__</label>
@@ -878,7 +901,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           </div>
         </div>
         <div class="pme-blk"><b>__DBT_eff__</b>
-          <div class="pme-attrs"><label class="chk"><input type="checkbox" id="ehct"> EH/CT </label></div>
+          <div class="pme-attrs"><label class="chk"><input type="checkbox" id="ehct"> EH/CT </label><label class="chk"><input type="checkbox" id="sSD"> SD</label></div>
         </div>
       </div>
 
@@ -1431,10 +1454,10 @@ __OTH_UNITS__
   function pchk(id){ return document.getElementById(id).checked; }
 
   var PBASE=[0.15,0.225,0.30];   // passive activation rate by "+" count (0/1/2)
-  var MASTER_KEY={sMt:'mt', sAn:'an', sEt:'et', ehct:'eh'};
-  var MASTER_ID={mt:'sMt', an:'sAn', et:'sEt', eh:'ehct'};
-  var simAll={mt:false, an:false, et:false, eh:false};
-  var simSel={mt:{}, an:{}, et:{}, eh:{}};
+  var MASTER_KEY={sMt:'mt', sAn:'an', sEt:'et', ehct:'eh', sSD:'sd'};
+  var MASTER_ID={mt:'sMt', an:'sAn', et:'sEt', eh:'ehct', sd:'sSD'};
+  var simAll={mt:false, an:false, et:false, eh:false, sd:false};
+  var simSel={mt:{}, an:{}, et:{}, eh:{}, sd:{}};
   function simGet(k,uid){ var m=simSel[k]; return (uid in m)?m[uid]:simAll[k]; }
   function updateMasters(){
     var cards=deckCards();
@@ -1450,10 +1473,10 @@ __OTH_UNITS__
     var box=document.getElementById('simCards'); if(!box) return;
     var cards=deckCards();
     if(!cards.length){ box.innerHTML='<span class="muted">__DBT_none_dash__</span>'; return; }
-    var h='<table class="simtbl"><thead><tr><th></th><th>Mt</th><th>An</th><th>Et</th><th>EH/CT</th></tr></thead><tbody>';
+    var h='<table class="simtbl"><thead><tr><th></th><th>Mt</th><th>An</th><th>Et</th><th>EH/CT</th><th>SD</th></tr></thead><tbody>';
     cards.forEach(function(c){
       h+='<tr data-uid="'+c.uid+'"><td class="nm"><img src="'+iconUrl(c.uid)+'" alt="">'+pesc(c.name)+'</td>';
-      ['mt','an','et','eh'].forEach(function(k){
+      ['mt','an','et','eh','sd'].forEach(function(k){
         h+='<td><input type="checkbox" class="simchk" data-k="'+k+'" data-uid="'+c.uid+'"'+(simGet(k,c.uid)?' checked':'')+'></td>';
       });
       h+='</tr>';
@@ -1464,6 +1487,7 @@ __OTH_UNITS__
   function recalcAll(){
     if(!pmeOn()) return;
     var deck=deckCards(), a;
+    var tgtMod=pchk('tgtMod'), expMode=pchk('expMode'), useTarget=tgtMod||expMode;
     var charm={},adx={},theme={};
     for(a=1;a<=5;a++){ charm[a]=pnum('charm'+a); adx[a]=+document.getElementById('adx'+a).value; theme[a]=pchk('theme'+a); }
     var costJob=+document.getElementById('costJob').value;
@@ -1484,6 +1508,17 @@ __OTH_UNITS__
                                   dmgRedP+=(t.dmgRedP||0)/100; dmgRedM+=(t.dmgRedM||0)/100; });
     enRate.forEach(function(t){ enRateDown+=t.rateDown/100; });
     enEff.forEach(function(t){ if(t.tCard) effDown[t.tCard]=(effDown[t.tCard]||0)+t.down/100; });
+
+    // コ:効果範囲+1 (target range +1) — auto-skill, triggers at most once deck-wide: P = 1 - prod(1-pi)
+    var hasKo=false, koNo=1;
+    deck.forEach(function(c){
+      if(!c.calc || c.calc.ko==null) return;
+      hasKo=true;
+      var pi=(PBASE[c.calc.ko]||0.15)+(theme[c.calc.a]?0.02:0);
+      pi=pi*(1+myRateUp)*(1-enRateDown); if(pi<0)pi=0; if(pi>1)pi=1;
+      koNo*=(1-pi);
+    });
+    var P=hasKo?(1-koNo):0;
 
     // deck-aggregate UP pools (every deck card's passive + Legendary)
     var passPool=[], legPool=[];
@@ -1522,6 +1557,15 @@ __OTH_UNITS__
     deck.forEach(function(c){ if(!c.calc||!c.calc.e.length) return;
       var at=c.calc.a, ct=c.calc.c;
       var sMt=simGet('mt',c.uid), sAn=simGet('an',c.uid), sEt=simGet('et',c.uid), ehct=simGet('eh',c.uid);
+      var sSD=simGet('sd',c.uid), lowT=1, highT=1, expT=1;
+      if(useTarget && c.calc.tn){
+        var tmin=c.calc.tn[0], tmax=c.calc.tn[1], sdOn=(c.calc.sd&&sSD);
+        var _lo=sdOn?tmax:tmin, _hi=tmax;            // outcome distribution (SD collapses to max)
+        lowT=_lo; highT=Math.min(tmax+(hasKo?1:0), 4);
+        var _eb=0, _et=0, _cnt=0;
+        for(var _t=_lo; _t<=_hi; _t++){ _eb+=_t; _et+=Math.min(_t+1,4); _cnt++; }
+        expT=(_eb/_cnt)*(1-P)+(_et/_cnt)*P;          // E[target] with コ:効果範囲+1 probability
+      }
       var trig=(c.calc.ut||[]).some(function(t){ return activeTypes[t]; });
       var cos=(costJob&&costJob===ct)?1.15:1;
       var charmM=1+(charm[at]||0)/100, themeM=theme[at]?1.1:1;
@@ -1541,7 +1585,8 @@ __OTH_UNITS__
         var cmd=1+cmdAttr+cmdEffUp-cmdEffDown-cmdShB-cmdDmgRed+cmdDis;
         var adxM=adxVal(at, e.k);   // 0.95 component is damage/debuff only
         var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
-        if(!totL[e.l]){ totL[e.l]={v:0,k:e.k,i:nseen++}; } totL[e.l].v+=rate; anyE=true;
+        var vlo=rate*lowT, vhi=rate*highT, vex=rate*expT;
+        if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++}; } totL[e.l].lo+=vlo; totL[e.l].hi+=vhi; totL[e.l].ex+=vex; anyE=true;
         // store the per-region breakdown for the click-to-explain popup
         var R=[
           {n:'__DBT_bd_numeric__', v:1, note:'__DBT_bd_fixed_conv__'},
@@ -1559,11 +1604,11 @@ __OTH_UNITS__
           {n:'__DBT_bd_order__', v:cmd, note:cmdNote(cmdAttr,cmdEffUp,cmdEffDown,cmdShB,cmdDmgRed,cmdDis)},
           {n:'__DBT_bd_random__', v:e.n, note:(e.k==='dmg'||e.k==='heal')?'__DBT_bd_dmgheal095__':'__DBT_bd_nondmg1__'}
         ];
-        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate};
-        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+rate.toFixed(3)+'</b></span>';
+        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate, tl:lowT, th:highT, te:expT, exp:expMode, sd:(c.calc.sd&&sSD)};
+        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+fmtVal(vlo,vhi,vex,expMode)+'</b></span>';
       });
       var box=document.querySelector('.slot-pme[data-uid="'+c.uid+'"]');
-      if(box) box.innerHTML=parts;
+      if(box){ box.innerHTML=parts; fitChips(box); }
     });
     var tb=document.getElementById('pmeTotal');
     if(tb){
@@ -1573,7 +1618,7 @@ __OTH_UNITS__
         var labels=Object.keys(totL).sort(function(x,y){ return (KP[totL[x].k]-KP[totL[y].k])||(totL[x].i-totL[y].i); });
         var rows='';
         labels.forEach(function(lbl){ var o=totL[lbl];
-          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+o.v.toFixed(3)+'</b></span>';
+          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+fmtVal(o.lo,o.hi,o.ex,expMode)+'</b></span>';
         });
         tb.innerHTML='<div class="pt-h">__DBT_total_effect__</div><div class="pt-row">'+rows+'</div>';
       }
@@ -1584,6 +1629,30 @@ __OTH_UNITS__
   var BREAKDOWN={};
   var ATTR_JP=__DBJS_ATTR_MAP__;
   function fmtNum(v){ var s=(Math.round(v*1e6)/1e6).toString(); return s; }
+  function fitChips(box){
+    if(!box) return;
+    var w=box.clientWidth-4; if(w<=0) return;
+    var chips=box.querySelectorAll('.pme-eff');
+    for(var i=0;i<chips.length;i++){
+      var ch=chips[i]; ch.style.fontSize='';
+      var sw=ch.scrollWidth; if(sw<=w) continue;
+      var fs=10*w/sw; if(fs<6) fs=6;
+      ch.style.fontSize=fs.toFixed(2)+'px';
+      var g=0;
+      while(ch.scrollWidth>w && fs>6 && g++<4){ fs=Math.max(6, fs*0.92); ch.style.fontSize=fs.toFixed(2)+'px'; }
+    }
+  }
+  var _fitTO;
+  window.addEventListener('resize', function(){
+    clearTimeout(_fitTO);
+    _fitTO=setTimeout(function(){
+      var bs=document.querySelectorAll('.slot-pme');
+      for(var i=0;i<bs.length;i++){ if(bs[i].offsetParent) fitChips(bs[i]); }
+    }, 150);
+  });
+  function fmtRange(lo, hi){ var a=lo.toFixed(3), b=hi.toFixed(3); return (a===b)?a:a+'~'+b; }
+  function fmtVal(lo, hi, ex, showExp){ var a=lo.toFixed(3), b=hi.toFixed(3);
+    if(a===b) return a; return showExp?(a+'~'+b+'('+ex.toFixed(3)+')'):(a+'~'+b); }
   function magNote(base, add, tm){
     var s='__DBT_bd_base_word__ '+fmtNum(base);
     if(add) s+=' + __DBT_bd_command_word__ '+fmtNum(add);
@@ -1628,10 +1697,17 @@ __OTH_UNITS__
       rows+='<tr><td class="bn">'+pesc(r.n)+'</td><td class="bv">×'+fmtNum(r.v)+'</td>'
            +'<td class="bd">'+pesc(r.note).replace(/\\n/g,'<br>')+'</td></tr>';
     });
+    var tl=bd.tl||1, th=bd.th||1, te=bd.te||1;
+    if(tl!==1 || th!==1){
+      var tv=(tl===th)?('×'+tl):('×'+tl+'~'+th);
+      var tnote=(bd.exp?('E '+te.toFixed(2)):'')+(bd.sd?((bd.exp?' / ':'')+'SD'):'');
+      rows+='<tr><td class="bn">__DBT_target_lbl__</td><td class="bv">'+tv+'</td><td class="bd">'+tnote+'</td></tr>';
+    }
     var kindJp=__DBJS_KIND_JP__[bd.kind]||bd.kind;
     document.getElementById('bdTitle').innerHTML=pesc(bd.card)+' <span class="bk k-'+bd.kind+'">'+pesc(bd.label)+' ('+kindJp+')</span>';
     document.getElementById('bdBody').innerHTML=rows;
-    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+bd.rate.toFixed(4);
+    var blo=bd.rate*tl, bhi=bd.rate*th, bex=bd.rate*te, ba=blo.toFixed(4), bb=bhi.toFixed(4);
+    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+((ba===bb)?ba:(bd.exp?ba+'~'+bb+'('+bex.toFixed(4)+')':ba+'~'+bb));
     document.getElementById('bdModal').classList.add('open');
   }
   function hideBreakdown(){ document.getElementById('bdModal').classList.remove('open'); }
