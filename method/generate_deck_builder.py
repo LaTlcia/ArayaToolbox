@@ -1538,7 +1538,17 @@ __OTH_UNITS__
         s+=add; });
       return s;
     }
-    function legUP(at,kind,atk,detail){ var s=0; legPool.forEach(function(l){ if(l.a===at&&l.k===kind&&(l.t===0||l.t===atk)){ s+=l.p; if(detail) detail.push(l); } }); return s; }
+    function legUP(at, kind, atk, detail){
+      var pk = (kind === 'debuff') ? 'buff' : kind;
+      var s = 0;
+      legPool.forEach(function(l){
+        if(l.a === at && l.k === pk && (l.t === 0 || l.t === atk)){
+          s += l.p;
+          if(detail) detail.push(l);
+        }
+      });
+      return s;
+    }
     // ADX 4-choice: 0.95 / 1 / (1.05, or 1.055 with theme) / that ×0.95.
     // The 0.95 component (choice #0 and #3) applies only to ダメージ·妨害; 支援·回復 drop it.
     function adxVal(at, kind){
