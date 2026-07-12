@@ -688,6 +688,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   tbody tr:nth-child(even) { background:var(--row2); }
   tbody tr:hover { background:#fff3cd; }
   tr.hidden { display:none; }
+  tr.card { content-visibility:auto; contain-intrinsic-height:auto 90px; }
 
   /* Card image stack: art + rarity frame + top-right category marker
      Marker size is bounded: <=1/4 height, <=1/2 width (awakening marker is widest, ~0.42 width, OK) */
