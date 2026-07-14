@@ -687,7 +687,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .pickpane h2 { font-size:15px; margin:4px 0 8px; color:#222; }
   .units { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px; }
   .unit { width:300px; border:1px solid #b7bdcc; border-radius:8px; background:#fff; padding:8px;
-          display:flex; flex-direction:column; gap:6px; }
+          display:flex; flex-direction:column; gap:6px;
+          content-visibility:auto; contain-intrinsic-size:auto 300px auto 220px; }
   .unit.hidden { display:none; }
   .unit.in-deck { outline:2px solid #4a8f4a; background:#f0f8f0; }
   .u-top { display:flex; align-items:center; gap:8px; }
@@ -703,6 +704,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .u-sname { font-weight:600; }
   .u-si { width:15px; height:15px; object-fit:contain; vertical-align:-2px; margin-right:4px; }
   .u-sdesc { color:#333; line-height:1.4; margin-top:2px; }
+
+  /* Deck-slot hover tooltip */
+  .slot-tip { position:fixed; z-index:10001; display:none; max-width:340px; padding:8px 10px;
+              background:rgba(25,30,42,.96); color:#fff; border:1px solid #8f9bb3; border-radius:7px;
+              box-shadow:0 4px 16px rgba(0,0,0,.32); font-size:12px; line-height:1.45; pointer-events:none; }
+  .slot-tip.open { display:block; }
+  .slot-tip .st-name { font-weight:700; font-size:13px; margin-bottom:3px; }
+  .slot-tip .st-skill { margin-top:4px; color:#e7ebf4; }
+  .slot-tip .st-skill b { color:#fff; }
 
   #pcount { color:#444; }
 
@@ -952,6 +962,7 @@ __OTH_UNITS__
     </div>
   </main>
 </div>
+<div class="slot-tip" id="slotTip" role="tooltip"></div>
 <div class="watermark"><img src="assets/remote/Image/Card/Card020000216.jpg" alt=""></div>
 
 <div class="bd-modal" id="bdModal">
@@ -1156,7 +1167,7 @@ __OTH_UNITS__
       var c=arr[i];
       if(c){
         h+='<div class="slotcell">'
-          +'<div class="slot filled" draggable="true" data-grp="'+grp+'" data-idx="'+i+'" data-uid="'+c.uid+'" '
+          +'<div class="slot filled" draggable="true" data-grp="'+grp+'" data-idx="'+i+'" data-uid="'+c.uid+'" data-ct="'+c.ct+'" '
           +'title="'+escAttr(c.name)+' ('+TYPE_LABEL[c.ct]+')">'
           +'<span class="cardimg">'
           +'<img class="art" loading="lazy" src="'+iconUrl(c.uid)+'" alt="" onerror="this.style.visibility=\\'hidden\\'">'
@@ -1538,7 +1549,17 @@ __OTH_UNITS__
         s+=add; });
       return s;
     }
-    function legUP(at,kind,atk,detail){ var s=0; legPool.forEach(function(l){ if(l.a===at&&l.k===kind&&(l.t===0||l.t===atk)){ s+=l.p; if(detail) detail.push(l); } }); return s; }
+    function legUP(at, kind, atk, detail){
+      var pk = (kind === 'debuff') ? 'buff' : kind;
+      var s = 0;
+      legPool.forEach(function(l){
+        if(l.a === at && l.k === pk && (l.t === 0 || l.t === atk)){
+          s += l.p;
+          if(detail) detail.push(l);
+        }
+      });
+      return s;
+    }
     // ADX 4-choice: 0.95 / 1 / (1.05, or 1.055 with theme) / that ×0.95.
     // The 0.95 component (choice #0 and #3) applies only to ダメージ·妨害; 支援·回復 drop it.
     function adxVal(at, kind){
@@ -1743,6 +1764,40 @@ __OTH_UNITS__
     if(col){ var ons=col.querySelectorAll('.tac-ic.on'); for(var i=0;i<ons.length;i++) ons[i].classList.remove('on'); }
     if(!wasOn) b.classList.add('on');
     recalcAll();
+  });
+
+
+  // ---------- Deck-slot tooltip ----------
+  var slotTip=document.getElementById('slotTip');
+  function slotTipHtml(slot){
+    var uid=slot.dataset.uid, ct=slot.dataset.ct, el=unitByKey[uid+'.'+ct];
+    if(!el) return '';
+    var d=parseUnit(el), blocks=el.querySelectorAll('.u-skill:not(.empty)'), h='';
+    for(var i=0;i<blocks.length;i++){
+      var n=blocks[i].querySelector('.u-sname'), x=blocks[i].querySelector('.u-sdesc');
+      if(n) h+='<div class="st-skill"><b>'+n.innerHTML+'</b>'+(x?'<br>'+x.innerHTML:'')+'</div>';
+    }
+    return '<div class="st-name">'+escAttr(d.name)+' ('+escAttr(TYPE_LABEL[d.ct]||'')+')</div>'+h;
+  }
+  function positionSlotTip(e){
+    var gap=14, x=e.clientX+gap, y=e.clientY+gap, r=slotTip.getBoundingClientRect();
+    if(x+r.width>window.innerWidth-8) x=Math.max(8,e.clientX-r.width-gap);
+    if(y+r.height>window.innerHeight-8) y=Math.max(8,e.clientY-r.height-gap);
+    slotTip.style.left=x+'px'; slotTip.style.top=y+'px';
+  }
+  document.querySelector('.deckpane').addEventListener('mouseover', function(e){
+    var slot=e.target.closest('.slot.filled');
+    if(!slot || !this.contains(slot)) return;
+    slotTip.innerHTML=slotTipHtml(slot);
+    if(!slotTip.innerHTML) return;
+    slotTip.classList.add('open'); positionSlotTip(e);
+  });
+  document.querySelector('.deckpane').addEventListener('mousemove', function(e){
+    if(slotTip.classList.contains('open')) positionSlotTip(e);
+  });
+  document.querySelector('.deckpane').addEventListener('mouseout', function(e){
+    var slot=e.target.closest('.slot.filled');
+    if(slot && (!e.relatedTarget || !slot.contains(e.relatedTarget))) slotTip.classList.remove('open');
   });
 
   // ---------- Init ----------
