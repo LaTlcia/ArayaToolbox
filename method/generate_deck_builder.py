@@ -291,6 +291,34 @@ def ko_plus(ga):
     return sc.passive_plus(ga)
 
 
+_ATTR_CH2ID = {"火": 1, "水": 2, "風": 3, "光": 4, "闇": 5}
+
+
+def effect_stat_code(kind, label):
+    """面板 (panel) mode: map a buff/debuff effect's (kind,label) to the compact stat
+    code its BaseStats comes from (pa/ma/pd/md = Ph.ATK/Sp.ATK/Ph.DEF/Sp.DEF, ea<n>/ed<n> =
+    elemental attack/defense buff for attribute n). Returns None when the effect has no
+    BaseStats mapping under the given formula (e.g. 最大HP buff, 回復 heal)."""
+    if kind not in ("buff", "debuff"):
+        return None
+    lab = label[1:] if (kind == "debuff" and label.startswith("敵")) else label
+    if lab == "ATK":
+        return "pa"
+    if lab == "Sp.ATK":
+        return "ma"
+    if lab == "DEF":
+        return "pd"
+    if lab == "Sp.DEF":
+        return "md"
+    if lab.endswith("属性攻") and len(lab) >= 4:
+        ch = lab[0]
+        return "ea%d" % _ATTR_CH2ID[ch] if ch in _ATTR_CH2ID else None
+    if lab.endswith("属性防") and len(lab) >= 4:
+        ch = lab[0]
+        return "ed%d" % _ATTR_CH2ID[ch] if ch in _ATTR_CH2ID else None
+    return None
+
+
 def build_calc(e, gvg, ga):
     """Static 牌効 data for one card (the live formula runs in JS). See skill_calc.py.
     Compact keys keep the per-unit data-calc blob small."""
@@ -306,7 +334,8 @@ def build_calc(e, gvg, ga):
         "a": e["attribute"], "c": e["cardType"], "r": 0 if e["cardType"] <= 4 else 1,
         "tn": tn, "sd": ("SD" in e["fg"]), "ko": ko_plus(ga),
         "e": [{"k": x["kind"], "l": x["label"], "m": x["mag"],
-               "g": x["gvg"], "n": x["rand"], "t": x["atk"]} for x in se["effs"]],
+               "g": x["gvg"], "n": x["rand"], "t": x["atk"],
+               "s": effect_stat_code(x["kind"], x["label"])} for x in se["effs"]],
         "am": se["addMag"], "ut": se["upT"], "tm": se["timeMax"], "eh": se["eh"], "ct": se["ct"],
         "pu": [{"k": p["kind"], "c": p["coeff"]} for p in sc.passive_up(ga)],
         "pp": sc.passive_plus(ga),
@@ -718,8 +747,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   /* 牌効 calculator: settings panel sits between the deck slots and the stats; results show under each deck card */
   #pmeToggle.active { background:#5b6b8c; color:#fff; border-color:#5b6b8c; }
+  #pmeToggle.active-panel { background:#7a4f9c; color:#fff; border-color:#7a4f9c; }
   #pmePanel { display:none; }
   .deckpane.pme-on #pmePanel { display:block; }
+  .pme-dmgpanel { display:none; margin-top:8px; padding-top:8px; border-top:1px dashed #c5ccda; }
+  .deckpane.pme-panel .pme-dmgpanel { display:flex; flex-wrap:wrap; gap:0 24px; }
+  .pme-dppanel { flex:1 1 320px; min-width:280px; }
+  .pme-dppanel .pme-attrs input[type=number] { width:56px; }
   .pme { margin:6px 0 12px; border-top:2px solid #9aa3b8; padding:8px 0 10px; }
   .pme h3 { font-size:14px; margin:2px 0 8px; color:#333; border-bottom:1px solid #c5ccda; padding-bottom:4px; }
   .pme h4 { font-size:12px; margin:0 0 4px; color:#444; }
@@ -851,7 +885,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   __DD_GA__
   <label class="chk"><input type="checkbox" id="deckOnly"> __DBT_deck_only__</label>
   <button class="btn" id="clearFilter" type="button">__DBT_filter_clear__</button>
-  <button class="btn" id="pmeToggle" type="button">__DBT_sim_label__ OFF</button>
+  <button class="btn" id="pmeToggle" type="button">__DBT_sim_label__ __DBT_sim_mode_off__</button>
   <span id="pcount"></span>
 </header>
 
@@ -914,6 +948,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <div class="pme-attrs"><label class="chk"><input type="checkbox" id="ehct"> EH/CT </label><label class="chk"><input type="checkbox" id="sSD"> SD</label></div>
         </div>
       </div>
+
+      <div class="pme-dmgpanel" id="dmgPanels"></div>
 
       <div class="pme-cardsel">
         <button type="button" class="simcards-tg" id="simCardsToggle" aria-expanded="false">__DBT_per_card__ <span class="caret">▾</span></button>
@@ -1406,7 +1442,8 @@ __OTH_UNITS__
   // data comes from data-calc (skill_calc.py); the deck-wide UP region + all user settings are applied here.
   var PME_TACTICS = __PME_TACTICS__;
   var deckpane = document.querySelector('.deckpane');
-  function pmeOn(){ return deckpane.classList.contains('pme-on'); }
+  function pmeMode(){ return deckpane.dataset.simMode || 'off'; }
+  function pmeOn(){ return pmeMode()!=='off'; }
   function pesc(s){ return (s+'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // adx selectors (theme turns the 1.05-based options into 1.055-based)
@@ -1420,6 +1457,55 @@ __OTH_UNITS__
     }
     row.innerHTML=h;
   })();
+
+  // 面板 mode: attacker/defender stat panels (base 4 stats + base-stat buff% + elemental buff%)
+  (function(){
+    var box=document.getElementById('dmgPanels');
+    function row(headTok, fields, mn, mx){
+      var h='<div class="pme-blk"><b>'+headTok+'</b><div class="pme-attrs">';
+      fields.forEach(function(f){
+        h+='<label>'+f.l+'<input type="number" class="dpnum" id="'+f.id+'" value="0" step="1" min="'+mn+'" max="'+mx+'"></label>';
+      });
+      return h+'</div></div>';
+    }
+    function panelHTML(px, titleTok){
+      var base=[{id:px+'_pa',l:'__DBT_panel_pa__'},{id:px+'_ma',l:'__DBT_panel_ma__'},
+                {id:px+'_pd',l:'__DBT_panel_pd__'},{id:px+'_md',l:'__DBT_panel_md__'}];
+      var baseB=[{id:px+'_paB',l:'__DBT_panel_pa__'},{id:px+'_maB',l:'__DBT_panel_ma__'},
+                 {id:px+'_pdB',l:'__DBT_panel_pd__'},{id:px+'_mdB',l:'__DBT_panel_md__'}];
+      var attrMap=__DBJS_ATTR_MAP__, ea=[], ed=[];
+      for(var n=1;n<=5;n++){ ea.push({id:px+'_ea'+n,l:attrMap[n]}); ed.push({id:px+'_ed'+n,l:attrMap[n]}); }
+      return '<div class="pme-dppanel"><h4>'+titleTok+'</h4>'
+           + row('__DBT_atk_base_stat__', base, 0, 999999)
+           + row('__DBT_atk_base_buff__', baseB, -70, 100)
+           + row('__DBT_elem_atk_buff__', ea, -50, 50)
+           + row('__DBT_elem_def_buff__', ed, -50, 50)
+           + '</div>';
+    }
+    if(box) box.innerHTML = panelHTML('dpA','__DBT_dmg_panel_title__') + panelHTML('dpD','__DBT_panel_def_title__');
+  })();
+  function dpNum(id){ var el=document.getElementById(id); return el?(+el.value||0):0; }
+  function getBaseStat(px, code){
+    if(code==='pa') return dpNum(px+'_pa');
+    if(code==='ma') return dpNum(px+'_ma');
+    if(code==='pd') return dpNum(px+'_pd');
+    if(code==='md') return dpNum(px+'_md');
+    if(code.indexOf('ea')===0) return (dpNum(px+'_pa')+dpNum(px+'_ma'))/2;
+    if(code.indexOf('ed')===0) return (dpNum(px+'_pd')+dpNum(px+'_md'))/2;
+    return 0;
+  }
+  function getBuffPct(px, code){
+    if(code==='pa') return dpNum(px+'_paB')/100;
+    if(code==='ma') return dpNum(px+'_maB')/100;
+    if(code==='pd') return dpNum(px+'_pdB')/100;
+    if(code==='md') return dpNum(px+'_mdB')/100;
+    if(code.indexOf('ea')===0 || code.indexOf('ed')===0) return dpNum(px+'_'+code)/100;
+    return 0;
+  }
+  function totalStat(px, baseCode, elemCode){
+    var v=getBaseStat(px,baseCode)*(1+getBuffPct(px,baseCode)) + getBaseStat(px,elemCode)*getBuffPct(px,elemCode);
+    return Math.max(1, v);
+  }
 
   // costume main job — only the options for the current role (__DBT_role_front__ 1-4 / __DBT_role_back__ 5-7)
   function rebuildCostJob(){
@@ -1498,6 +1584,7 @@ __OTH_UNITS__
   function recalcAll(){
     if(!pmeOn()) return;
     var deck=deckCards(), a;
+    var simMode=pmeMode();
     var tgtMod=pchk('tgtMod'), expMode=pchk('expMode'), useTarget=tgtMod||expMode;
     var charm={},adx={},theme={};
     for(a=1;a<=5;a++){ charm[a]=pnum('charm'+a); adx[a]=+document.getElementById('adx'+a).value; theme[a]=pchk('theme'+a); }
@@ -1607,7 +1694,32 @@ __OTH_UNITS__
         var adxM=adxVal(at, e.k);   // 0.95 component is damage/debuff only
         var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
         var vlo=rate*lowT, vhi=rate*highT, vex=rate*expT;
-        if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++}; } totL[e.l].lo+=vlo; totL[e.l].hi+=vhi; totL[e.l].ex+=vex; anyE=true;
+        var showExpFinal=expMode, panelInfo=null;
+        if(simMode==='panel'){
+          if(e.k==='dmg'){
+            var dmgMagVal=vex;
+            var baseAtk=(e.t===1)?'pa':'ma', baseDef=(e.t===1)?'pd':'md';
+            var TotalAtk=totalStat('dpA', baseAtk, 'ea'+at);
+            var TotalDef=totalStat('dpD', baseDef, 'ed'+at);
+            var ratio=Math.min(10, Math.floor(TotalAtk/TotalDef));
+            var core=(TotalAtk-(2/3)*TotalDef)*dmgMagVal*(1+0.05*ratio);
+            var c1=core*0.9+1, c2=core*1.0+1, c3=core*0.9+200, c4=core*1.0+200;
+            vlo=Math.min(c1,c2,c3,c4); vhi=Math.max(c1,c2,c3,c4); vex=core*0.95+100.5;
+            showExpFinal=true;
+            panelInfo={dmg:true, totalAtk:TotalAtk, totalDef:TotalDef, ratio:ratio, dmgMag:dmgMagVal};
+          } else if((e.k==='buff'||e.k==='debuff') && e.s){
+            var buffMagVal=vex;
+            var px=(e.k==='buff')?'dpA':'dpD';
+            var BaseStats=getBaseStat(px, e.s);
+            var buffVal=buffMagVal*BaseStats;
+            vlo=buffVal; vhi=buffVal; vex=buffVal;
+            showExpFinal=false;
+            panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal,
+                       side:(e.k==='buff'?'__DBT_dmg_panel_title__':'__DBT_panel_def_title__')};
+          }
+        }
+        if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++,se:false}; }
+        totL[e.l].lo+=vlo; totL[e.l].hi+=vhi; totL[e.l].ex+=vex; if(showExpFinal) totL[e.l].se=true; anyE=true;
         // store the per-region breakdown for the click-to-explain popup
         var R=[
           {n:'__DBT_bd_numeric__', v:1, note:'__DBT_bd_fixed_conv__'},
@@ -1625,8 +1737,9 @@ __OTH_UNITS__
           {n:'__DBT_bd_order__', v:cmd, note:cmdNote(cmdAttr,cmdEffUp,cmdEffDown,cmdShB,cmdDmgRed,cmdDis)},
           {n:'__DBT_bd_random__', v:e.n, note:(e.k==='dmg'||e.k==='heal')?'__DBT_bd_dmgheal095__':'__DBT_bd_nondmg1__'}
         ];
-        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate, tl:lowT, th:highT, te:expT, exp:expMode, sd:(c.calc.sd&&sSD)};
-        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+fmtVal(vlo,vhi,vex,expMode)+'</b></span>';
+        BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate, tl:lowT, th:highT, te:expT, exp:expMode, sd:(c.calc.sd&&sSD),
+                                  mode:simMode, panel:panelInfo, flo:vlo, fhi:vhi, fex:vex, fexp:showExpFinal};
+        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+fmtVal(vlo,vhi,vex,showExpFinal)+'</b></span>';
       });
       var box=document.querySelector('.slot-pme[data-uid="'+c.uid+'"]');
       if(box){ box.innerHTML=parts; fitChips(box); }
@@ -1639,7 +1752,7 @@ __OTH_UNITS__
         var labels=Object.keys(totL).sort(function(x,y){ return (KP[totL[x].k]-KP[totL[y].k])||(totL[x].i-totL[y].i); });
         var rows='';
         labels.forEach(function(lbl){ var o=totL[lbl];
-          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+fmtVal(o.lo,o.hi,o.ex,expMode)+'</b></span>';
+          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+fmtVal(o.lo,o.hi,o.ex,expMode||o.se)+'</b></span>';
         });
         tb.innerHTML='<div class="pt-h">__DBT_total_effect__</div><div class="pt-row">'+rows+'</div>';
       }
@@ -1724,11 +1837,23 @@ __OTH_UNITS__
       var tnote=(bd.exp?('E '+te.toFixed(2)):'')+(bd.sd?((bd.exp?' / ':'')+'SD'):'');
       rows+='<tr><td class="bn">__DBT_target_lbl__</td><td class="bv">'+tv+'</td><td class="bd">'+tnote+'</td></tr>';
     }
+    if(bd.panel && bd.panel.dmg){
+      var p=bd.panel;
+      rows+='<tr><td class="bn">__DBT_total_atk_label__</td><td class="bv">'+fmtNum(p.totalAtk)+'</td><td class="bd">__DBT_atk_base_stat__ / __DBT_elem_atk_buff__</td></tr>';
+      rows+='<tr><td class="bn">__DBT_total_def_label__</td><td class="bv">'+fmtNum(p.totalDef)+'</td><td class="bd">__DBT_atk_base_stat__ / __DBT_elem_def_buff__</td></tr>';
+      rows+='<tr><td class="bn">floor(TotalAtk/TotalDef)</td><td class="bv">'+p.ratio+'</td><td class="bd">min( . . . ,10)</td></tr>';
+      rows+='<tr><td class="bn">DamageMag</td><td class="bv">'+fmtNum(p.dmgMag)+'</td><td class="bd">__DBT_sim_mode_rate__</td></tr>';
+      rows+='<tr><td class="bn">__DBT_dmg_range_label__</td><td class="bv" colspan="2">__DBT_dmg_min_label__ '+bd.flo.toFixed(3)+' / __DBT_dmg_max_label__ '+bd.fhi.toFixed(3)+' / __DBT_dmg_avg_label__ '+bd.fex.toFixed(3)+'</td></tr>';
+    } else if(bd.panel && !bd.panel.dmg){
+      var p2=bd.panel;
+      rows+='<tr><td class="bn">BaseStats</td><td class="bv">'+fmtNum(p2.baseStats)+'</td><td class="bd">'+p2.side+'</td></tr>';
+      rows+='<tr><td class="bn">BuffMag</td><td class="bv">'+fmtNum(p2.buffMag)+'</td><td class="bd">__DBT_sim_mode_rate__</td></tr>';
+    }
     var kindJp=__DBJS_KIND_JP__[bd.kind]||bd.kind;
     document.getElementById('bdTitle').innerHTML=pesc(bd.card)+' <span class="bk k-'+bd.kind+'">'+pesc(bd.label)+' ('+kindJp+')</span>';
     document.getElementById('bdBody').innerHTML=rows;
-    var blo=bd.rate*tl, bhi=bd.rate*th, bex=bd.rate*te, ba=blo.toFixed(4), bb=bhi.toFixed(4);
-    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+((ba===bb)?ba:(bd.exp?ba+'~'+bb+'('+bex.toFixed(4)+')':ba+'~'+bb));
+    var ba=bd.flo.toFixed(4), bb=bd.fhi.toFixed(4);
+    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+((ba===bb)?ba:(bd.fexp?ba+'~'+bb+'('+bd.fex.toFixed(4)+')':ba+'~'+bb));
     document.getElementById('bdModal').classList.add('open');
   }
   function hideBreakdown(){ document.getElementById('bdModal').classList.remove('open'); }
@@ -1738,12 +1863,17 @@ __OTH_UNITS__
   });
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') hideBreakdown(); });
 
+  var SIM_MODES=['off','rate','panel'];
+  var SIM_LABELS={off:'__DBT_sim_mode_off__', rate:'__DBT_sim_mode_rate__', panel:'__DBT_sim_mode_panel__'};
   document.getElementById('pmeToggle').addEventListener('click', function(){
-    var on=!deckpane.classList.contains('pme-on');
-    deckpane.classList.toggle('pme-on', on);
-    this.textContent='__DBT_sim_label__ '+(on?'ON':'OFF');
-    this.classList.toggle('active', on);
-    if(on) recalcAll();
+    var next=SIM_MODES[(SIM_MODES.indexOf(pmeMode())+1)%3];
+    deckpane.dataset.simMode=next;
+    deckpane.classList.toggle('pme-on', next!=='off');
+    deckpane.classList.toggle('pme-panel', next==='panel');
+    this.textContent='__DBT_sim_label__ '+SIM_LABELS[next];
+    this.classList.toggle('active', next==='rate');
+    this.classList.toggle('active-panel', next==='panel');
+    if(next!=='off') recalcAll();
   });
   document.getElementById('pmePanel').addEventListener('change', function(e){
     var t=e.target;
