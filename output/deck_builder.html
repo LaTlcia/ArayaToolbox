@@ -4065,21 +4065,23 @@
       });
       return h+'</div></div>';
     }
-    function panelHTML(px, titleTok){
-      var base=[{id:px+'_pa',l:'ATK'},{id:px+'_ma',l:'Sp.ATK'},
-                {id:px+'_pd',l:'DEF'},{id:px+'_md',l:'Sp.DEF'}];
-      var baseB=[{id:px+'_paB',l:'ATK'},{id:px+'_maB',l:'Sp.ATK'},
-                 {id:px+'_pdB',l:'DEF'},{id:px+'_mdB',l:'Sp.DEF'}];
+    function panelHTML(px, titleTok, full){
+      var baseB=[{id:px+'_pdB',l:'DEF'},{id:px+'_mdB',l:'Sp.DEF'}];
+      var base=[{id:px+'_pd',l:'DEF'},{id:px+'_md',l:'Sp.DEF'}];
+      if(full){
+        base=[{id:px+'_pa',l:'ATK'},{id:px+'_ma',l:'Sp.ATK'}].concat(base);
+        baseB=[{id:px+'_paB',l:'ATK'},{id:px+'_maB',l:'Sp.ATK'}].concat(baseB);
+      }
       var attrMap={"1": "火", "2": "水", "3": "風", "4": "光", "5": "闇"}, ea=[], ed=[];
       for(var n=1;n<=5;n++){ ea.push({id:px+'_ea'+n,l:attrMap[n]}); ed.push({id:px+'_ed'+n,l:attrMap[n]}); }
-      return '<div class="pme-dppanel"><h4>'+titleTok+'</h4>'
-           + row('基礎スタッツ', base, 0, 999999)
-           + row('基礎Buff%', baseB, -70, 100)
-           + row('属性攻撃Buff%', ea, -50, 50)
-           + row('属性防御Buff%', ed, -50, 50)
-           + '</div>';
+      var h='<div class="pme-dppanel"><h4>'+titleTok+'</h4>'
+          + row('基礎スタッツ', base, 0, 999999)
+          + row('基礎Buff%', baseB, -70, 100);
+      if(full) h += row('属性攻撃Buff%', ea, -50, 50);
+      h += row('属性防御Buff%', ed, -50, 50) + '</div>';
+      return h;
     }
-    if(box) box.innerHTML = panelHTML('dpA','ダメージ計算 スタッツ入力') + panelHTML('dpD','防御側 スタッツ');
+    if(box) box.innerHTML = panelHTML('dpA','ダメージ計算 スタッツ入力', true) + panelHTML('dpD','防御側 スタッツ', false);
   })();
   function dpNum(id){ var el=document.getElementById(id); return el?(+el.value||0):0; }
   function getBaseStat(px, code){
@@ -4300,19 +4302,18 @@
             var TotalDef=totalStat('dpD', baseDef, 'ed'+at);
             var ratio=Math.min(10, Math.floor(TotalAtk/TotalDef));
             var core=(TotalAtk-(2/3)*TotalDef)*dmgMagVal*(1+0.05*ratio);
+            core=Math.max(0, core);
             var c1=core*0.9+1, c2=core*1.0+1, c3=core*0.9+200, c4=core*1.0+200;
             vlo=Math.min(c1,c2,c3,c4); vhi=Math.max(c1,c2,c3,c4); vex=core*0.95+100.5;
             showExpFinal=true;
             panelInfo={dmg:true, totalAtk:TotalAtk, totalDef:TotalDef, ratio:ratio, dmgMag:dmgMagVal};
           } else if((e.k==='buff'||e.k==='debuff') && e.s){
             var buffMagVal=vex;
-            var px=(e.k==='buff')?'dpA':'dpD';
-            var BaseStats=getBaseStat(px, e.s);
+            var BaseStats=getBaseStat('dpA', e.s);
             var buffVal=buffMagVal*BaseStats;
             vlo=buffVal; vhi=buffVal; vex=buffVal;
             showExpFinal=false;
-            panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal,
-                       side:(e.k==='buff'?'ダメージ計算 スタッツ入力':'防御側 スタッツ')};
+            panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal, side:'ダメージ計算 スタッツ入力'};
           }
         }
         if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++,se:false}; }
