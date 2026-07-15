@@ -1719,8 +1719,9 @@ __OTH_UNITS__
             panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal, side:'__DBT_dmg_panel_title__'};
           }
         }
-        if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++,se:false}; }
-        totL[e.l].lo+=vlo; totL[e.l].hi+=vhi; totL[e.l].ex+=vex; if(showExpFinal) totL[e.l].se=true; anyE=true;
+        var isPanelVal=(panelInfo!==null);
+        if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++,se:false,pv:false}; }
+        totL[e.l].lo+=vlo; totL[e.l].hi+=vhi; totL[e.l].ex+=vex; if(showExpFinal) totL[e.l].se=true; if(isPanelVal) totL[e.l].pv=true; anyE=true;
         // store the per-region breakdown for the click-to-explain popup
         var R=[
           {n:'__DBT_bd_numeric__', v:1, note:'__DBT_bd_fixed_conv__'},
@@ -1740,7 +1741,7 @@ __OTH_UNITS__
         ];
         BREAKDOWN[c.uid+'#'+ei]={card:c.name, label:e.l, kind:e.k, R:R, rate:rate, tl:lowT, th:highT, te:expT, exp:expMode, sd:(c.calc.sd&&sSD),
                                   mode:simMode, panel:panelInfo, flo:vlo, fhi:vhi, fex:vex, fexp:showExpFinal};
-        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+fmtVal(vlo,vhi,vex,showExpFinal)+'</b></span>';
+        parts+='<span class="pme-eff k-'+e.k+'" data-bd="'+c.uid+'#'+ei+'" title="__DBT_click_breakdown__">'+pesc(e.l)+' <b>'+fmtVal(vlo,vhi,vex,showExpFinal,isPanelVal)+'</b></span>';
       });
       var box=document.querySelector('.slot-pme[data-uid="'+c.uid+'"]');
       if(box){ box.innerHTML=parts; fitChips(box); }
@@ -1753,7 +1754,7 @@ __OTH_UNITS__
         var labels=Object.keys(totL).sort(function(x,y){ return (KP[totL[x].k]-KP[totL[y].k])||(totL[x].i-totL[y].i); });
         var rows='';
         labels.forEach(function(lbl){ var o=totL[lbl];
-          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+fmtVal(o.lo,o.hi,o.ex,expMode||o.se)+'</b></span>';
+          rows+='<span class="pt-k k-'+o.k+'">'+pesc(lbl)+' <b>'+fmtVal(o.lo,o.hi,o.ex,expMode||o.se,o.pv)+'</b></span>';
         });
         tb.innerHTML='<div class="pt-h">__DBT_total_effect__</div><div class="pt-row">'+rows+'</div>';
       }
@@ -1786,8 +1787,11 @@ __OTH_UNITS__
     }, 150);
   });
   function fmtRange(lo, hi){ var a=lo.toFixed(3), b=hi.toFixed(3); return (a===b)?a:a+'~'+b; }
-  function fmtVal(lo, hi, ex, showExp){ var a=lo.toFixed(3), b=hi.toFixed(3);
-    if(a===b) return a; return showExp?(a+'~'+b+'('+ex.toFixed(3)+')'):(a+'~'+b); }
+  function fmtVal(lo, hi, ex, showExp, asInt){
+    var a=asInt?String(Math.floor(lo)):lo.toFixed(3), b=asInt?String(Math.floor(hi)):hi.toFixed(3);
+    if(a===b) return a;
+    return showExp?(a+'~'+b+'('+(asInt?String(Math.floor(ex)):ex.toFixed(3))+')'):(a+'~'+b);
+  }
   function magNote(base, add, tm){
     var s='__DBT_bd_base_word__ '+fmtNum(base);
     if(add) s+=' + __DBT_bd_command_word__ '+fmtNum(add);
@@ -1844,7 +1848,7 @@ __OTH_UNITS__
       rows+='<tr><td class="bn">__DBT_total_def_label__</td><td class="bv">'+fmtNum(p.totalDef)+'</td><td class="bd">__DBT_atk_base_stat__ / __DBT_elem_def_buff__</td></tr>';
       rows+='<tr><td class="bn">floor(TotalAtk/TotalDef)</td><td class="bv">'+p.ratio+'</td><td class="bd">min( . . . ,10)</td></tr>';
       rows+='<tr><td class="bn">DamageMag</td><td class="bv">'+fmtNum(p.dmgMag)+'</td><td class="bd">__DBT_sim_mode_rate__</td></tr>';
-      rows+='<tr><td class="bn">__DBT_dmg_range_label__</td><td class="bv" colspan="2">__DBT_dmg_min_label__ '+bd.flo.toFixed(3)+' / __DBT_dmg_max_label__ '+bd.fhi.toFixed(3)+' / __DBT_dmg_avg_label__ '+bd.fex.toFixed(3)+'</td></tr>';
+      rows+='<tr><td class="bn">__DBT_dmg_range_label__</td><td class="bv" colspan="2">__DBT_dmg_min_label__ '+Math.floor(bd.flo)+' / __DBT_dmg_max_label__ '+Math.floor(bd.fhi)+' / __DBT_dmg_avg_label__ '+Math.floor(bd.fex)+'</td></tr>';
     } else if(bd.panel && !bd.panel.dmg){
       var p2=bd.panel;
       rows+='<tr><td class="bn">BaseStats</td><td class="bv">'+fmtNum(p2.baseStats)+'</td><td class="bd">'+p2.side+'</td></tr>';
@@ -1853,8 +1857,11 @@ __OTH_UNITS__
     var kindJp=__DBJS_KIND_JP__[bd.kind]||bd.kind;
     document.getElementById('bdTitle').innerHTML=pesc(bd.card)+' <span class="bk k-'+bd.kind+'">'+pesc(bd.label)+' ('+kindJp+')</span>';
     document.getElementById('bdBody').innerHTML=rows;
-    var ba=bd.flo.toFixed(4), bb=bd.fhi.toFixed(4);
-    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+((ba===bb)?ba:(bd.fexp?ba+'~'+bb+'('+bd.fex.toFixed(4)+')':ba+'~'+bb));
+    var bdIsPanel=(bd.panel!=null);
+    var ba=bdIsPanel?String(Math.floor(bd.flo)):bd.flo.toFixed(4);
+    var bb=bdIsPanel?String(Math.floor(bd.fhi)):bd.fhi.toFixed(4);
+    var bex=bdIsPanel?String(Math.floor(bd.fex)):bd.fex.toFixed(4);
+    document.getElementById('bdTotal').textContent='__DBT_bd_effect_total__ = '+((ba===bb)?ba:(bd.fexp?ba+'~'+bb+'('+bex+')':ba+'~'+bb));
     document.getElementById('bdModal').classList.add('open');
   }
   function hideBreakdown(){ document.getElementById('bdModal').classList.remove('open'); }
