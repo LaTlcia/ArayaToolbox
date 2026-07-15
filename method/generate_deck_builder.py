@@ -1468,21 +1468,23 @@ __OTH_UNITS__
       });
       return h+'</div></div>';
     }
-    function panelHTML(px, titleTok){
-      var base=[{id:px+'_pa',l:'__DBT_panel_pa__'},{id:px+'_ma',l:'__DBT_panel_ma__'},
-                {id:px+'_pd',l:'__DBT_panel_pd__'},{id:px+'_md',l:'__DBT_panel_md__'}];
-      var baseB=[{id:px+'_paB',l:'__DBT_panel_pa__'},{id:px+'_maB',l:'__DBT_panel_ma__'},
-                 {id:px+'_pdB',l:'__DBT_panel_pd__'},{id:px+'_mdB',l:'__DBT_panel_md__'}];
+    function panelHTML(px, titleTok, full){
+      var baseB=[{id:px+'_pdB',l:'__DBT_panel_pd__'},{id:px+'_mdB',l:'__DBT_panel_md__'}];
+      var base=[{id:px+'_pd',l:'__DBT_panel_pd__'},{id:px+'_md',l:'__DBT_panel_md__'}];
+      if(full){
+        base=[{id:px+'_pa',l:'__DBT_panel_pa__'},{id:px+'_ma',l:'__DBT_panel_ma__'}].concat(base);
+        baseB=[{id:px+'_paB',l:'__DBT_panel_pa__'},{id:px+'_maB',l:'__DBT_panel_ma__'}].concat(baseB);
+      }
       var attrMap=__DBJS_ATTR_MAP__, ea=[], ed=[];
       for(var n=1;n<=5;n++){ ea.push({id:px+'_ea'+n,l:attrMap[n]}); ed.push({id:px+'_ed'+n,l:attrMap[n]}); }
-      return '<div class="pme-dppanel"><h4>'+titleTok+'</h4>'
-           + row('__DBT_atk_base_stat__', base, 0, 999999)
-           + row('__DBT_atk_base_buff__', baseB, -70, 100)
-           + row('__DBT_elem_atk_buff__', ea, -50, 50)
-           + row('__DBT_elem_def_buff__', ed, -50, 50)
-           + '</div>';
+      var h='<div class="pme-dppanel"><h4>'+titleTok+'</h4>'
+          + row('__DBT_atk_base_stat__', base, 0, 999999)
+          + row('__DBT_atk_base_buff__', baseB, -70, 100);
+      if(full) h += row('__DBT_elem_atk_buff__', ea, -50, 50);
+      h += row('__DBT_elem_def_buff__', ed, -50, 50) + '</div>';
+      return h;
     }
-    if(box) box.innerHTML = panelHTML('dpA','__DBT_dmg_panel_title__') + panelHTML('dpD','__DBT_panel_def_title__');
+    if(box) box.innerHTML = panelHTML('dpA','__DBT_dmg_panel_title__', true) + panelHTML('dpD','__DBT_panel_def_title__', false);
   })();
   function dpNum(id){ var el=document.getElementById(id); return el?(+el.value||0):0; }
   function getBaseStat(px, code){
@@ -1703,19 +1705,18 @@ __OTH_UNITS__
             var TotalDef=totalStat('dpD', baseDef, 'ed'+at);
             var ratio=Math.min(10, Math.floor(TotalAtk/TotalDef));
             var core=(TotalAtk-(2/3)*TotalDef)*dmgMagVal*(1+0.05*ratio);
+            core=Math.max(0, core);
             var c1=core*0.9+1, c2=core*1.0+1, c3=core*0.9+200, c4=core*1.0+200;
             vlo=Math.min(c1,c2,c3,c4); vhi=Math.max(c1,c2,c3,c4); vex=core*0.95+100.5;
             showExpFinal=true;
             panelInfo={dmg:true, totalAtk:TotalAtk, totalDef:TotalDef, ratio:ratio, dmgMag:dmgMagVal};
           } else if((e.k==='buff'||e.k==='debuff') && e.s){
             var buffMagVal=vex;
-            var px=(e.k==='buff')?'dpA':'dpD';
-            var BaseStats=getBaseStat(px, e.s);
+            var BaseStats=getBaseStat('dpA', e.s);
             var buffVal=buffMagVal*BaseStats;
             vlo=buffVal; vhi=buffVal; vex=buffVal;
             showExpFinal=false;
-            panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal,
-                       side:(e.k==='buff'?'__DBT_dmg_panel_title__':'__DBT_panel_def_title__')};
+            panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal, side:'__DBT_dmg_panel_title__'};
           }
         }
         if(!totL[e.l]){ totL[e.l]={lo:0,hi:0,ex:0,k:e.k,i:nseen++,se:false}; }
