@@ -942,6 +942,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <label class="chk"><input type="checkbox" id="sMt"> __DBT_stack_mt__</label>
             <label class="chk"><input type="checkbox" id="sAn"> __DBT_stack_an__</label>
             <label class="chk"><input type="checkbox" id="sEt"> __DBT_stack_et__</label>
+            <label class="chk"><input type="checkbox" id="sBa"> __DBT_stack_ba__</label>
           </div>
         </div>
         <div class="pme-blk"><b>__DBT_eff__</b>
@@ -1553,10 +1554,10 @@ __OTH_UNITS__
   function pchk(id){ return document.getElementById(id).checked; }
 
   var PBASE=[0.15,0.225,0.30];   // passive activation rate by "+" count (0/1/2)
-  var MASTER_KEY={sMt:'mt', sAn:'an', sEt:'et', ehct:'eh', sSD:'sd'};
-  var MASTER_ID={mt:'sMt', an:'sAn', et:'sEt', eh:'ehct', sd:'sSD'};
-  var simAll={mt:false, an:false, et:false, eh:false, sd:false};
-  var simSel={mt:{}, an:{}, et:{}, eh:{}, sd:{}};
+  var MASTER_KEY={sMt:'mt', sAn:'an', sEt:'et', sBa:'ba', ehct:'eh', sSD:'sd'};
+  var MASTER_ID={mt:'sMt', an:'sAn', et:'sEt', ba:'sBa', eh:'ehct', sd:'sSD'};
+  var simAll={mt:false, an:false, et:false, ba:false, eh:false, sd:false};
+  var simSel={mt:{}, an:{}, et:{}, ba:{}, eh:{}, sd:{}};
   function simGet(k,uid){ var m=simSel[k]; return (uid in m)?m[uid]:simAll[k]; }
   function updateMasters(){
     var cards=deckCards();
@@ -1572,10 +1573,10 @@ __OTH_UNITS__
     var box=document.getElementById('simCards'); if(!box) return;
     var cards=deckCards();
     if(!cards.length){ box.innerHTML='<span class="muted">__DBT_none_dash__</span>'; return; }
-    var h='<table class="simtbl"><thead><tr><th></th><th>Mt</th><th>An</th><th>Et</th><th>EH/CT</th><th>SD</th></tr></thead><tbody>';
+    var h='<table class="simtbl"><thead><tr><th></th><th>Mt</th><th>An</th><th>Et</th><th>Ba</th><th>EH/CT</th><th>SD</th></tr></thead><tbody>';
     cards.forEach(function(c){
       h+='<tr data-uid="'+c.uid+'"><td class="nm"><img src="'+iconUrl(c.uid)+'" alt="">'+pesc(c.name)+'</td>';
-      ['mt','an','et','eh','sd'].forEach(function(k){
+      ['mt','an','et','ba','eh','sd'].forEach(function(k){
         h+='<td><input type="checkbox" class="simchk" data-k="'+k+'" data-uid="'+c.uid+'"'+(simGet(k,c.uid)?' checked':'')+'></td>';
       });
       h+='</tr>';
@@ -1666,7 +1667,7 @@ __OTH_UNITS__
     var totL={}, nseen=0, anyE=false;
     deck.forEach(function(c){ if(!c.calc||!c.calc.e.length) return;
       var at=c.calc.a, ct=c.calc.c;
-      var sMt=simGet('mt',c.uid), sAn=simGet('an',c.uid), sEt=simGet('et',c.uid), ehct=simGet('eh',c.uid);
+      var sMt=simGet('mt',c.uid), sAn=simGet('an',c.uid), sEt=simGet('et',c.uid), sBa=simGet('ba',c.uid), ehct=simGet('eh',c.uid);
       var sSD=simGet('sd',c.uid), lowT=1, highT=1, expT=1;
       if(useTarget && c.calc.tn){
         var tmin=c.calc.tn[0], tmax=c.calc.tn[1], sdOn=(c.calc.sd&&sSD);
@@ -1686,6 +1687,7 @@ __OTH_UNITS__
         var addMag=trig?(c.calc.am||0):0, tm=c.calc.tm||0;
         var mag=(e.m+addMag)*(1+tm);
         var stack=e.k==='dmg'?(sMt?1.2:1):(e.k==='heal'?(sEt?1.3:1):(sAn?1.3:1));
+        var baM=(e.k==='dmg'&&sBa)?0.7:1;   // Ba: target's damage-cut mark -> this card's damage x0.7
         var pdet=[], ldet=[], pUp=passUP(e.k,pdet), lUp=legUP(at,e.k,e.t,ldet), up=1+pUp+lUp;
         // __DBT_bd_order__: attribute boost (all kinds) + __DBT_eff__ by card type − 相手 __DBT_eff__ by card type;
         // attribute shield skips 回復; damage shield + __DBT_bd_disadv__ only hit damage
@@ -1694,7 +1696,7 @@ __OTH_UNITS__
         if(e.k==='dmg'){ cmdDmgRed=(e.t===2?dmgRedM:dmgRedP); cmdDis=disadv; }
         var cmd=1+cmdAttr+cmdEffUp-cmdEffDown-cmdShB-cmdDmgRed+cmdDis;
         var adxM=adxVal(at, e.k);   // 0.95 component is damage/debuff only
-        var rate=e.g*mag*1.5*cos*1.1*stack*charmM*adxM*themeM*up*ehMul*cmd*e.n;
+        var rate=e.g*mag*1.5*cos*1.1*stack*baM*charmM*adxM*themeM*up*ehMul*cmd*e.n;
         var vlo=rate*lowT, vhi=rate*highT, vex=rate*expT;
         var showExpFinal=expMode, panelInfo=null;
         if(simMode==='panel'){
@@ -1705,7 +1707,7 @@ __OTH_UNITS__
             var TotalDef=totalStat('dpD', baseDef, 'ed'+at);
             var ratio=Math.min(10, Math.floor(TotalAtk/TotalDef));
             var core=(TotalAtk-(2/3)*TotalDef)*dmgMagVal*(1+0.05*ratio);
-            core=Math.max(0, core);
+            core=Math.max(1, core);
             var c1=core*0.9+1, c2=core*1.0+1, c3=core*0.9+200, c4=core*1.0+200;
             vlo=Math.min(c1,c2,c3,c4); vhi=Math.max(c1,c2,c3,c4); vex=core*0.95+100.5;
             showExpFinal=true;
@@ -1717,6 +1719,13 @@ __OTH_UNITS__
             vlo=buffVal; vhi=buffVal; vex=buffVal;
             showExpFinal=false;
             panelInfo={dmg:false, baseStats:BaseStats, buffMag:buffMagVal, side:'__DBT_dmg_panel_title__'};
+          } else if(e.k==='heal'){
+            var healMagVal=vex;
+            var HealBase=(getBaseStat('dpA','pd')+getBaseStat('dpA','md'))/2;
+            var healVal=healMagVal*HealBase;
+            vlo=healVal; vhi=healVal; vex=healVal;
+            showExpFinal=false;
+            panelInfo={dmg:false, baseStats:HealBase, buffMag:healMagVal, side:'__DBT_dmg_panel_title__ (__DBT_panel_pd__+__DBT_panel_md__)/2'};
           }
         }
         var isPanelVal=(panelInfo!==null);
@@ -1731,6 +1740,7 @@ __OTH_UNITS__
           {n:'__DBT_specialty__', v:cos, note:cos>1?('__DBT_bd_match_open__'+ct+')'):'__DBT_bd_nomatch1__'},
           {n:'__DBT_bd_grace__', v:1.1, note:'__DBT_bd_fixed__'},
           {n:'__DBT_stack_title__', v:stack, note:stackNote(e.k,sMt,sAn,sEt)},
+          {n:'Ba', v:baM, note:(e.k==='dmg')?(sBa?'Ba ON → 0.7':'Ba OFF → 1'):'__DBT_bd_nondmg1__'},
           {n:'CHARM', v:charmM, note:'__DBT_attr_lbl__'+ATTR_JP[at]+' +'+(charm[at]||0)+'%'},
           {n:'ADX', v:adxM, note:adxNote(at, e.k)},
           {n:'__DBT_theme__', v:themeM, note:theme[at]?('__DBT_attr_lbl__'+ATTR_JP[at]+'__DBT_bd_theme_match__'):'__DBT_bd_nomatch1__'},
