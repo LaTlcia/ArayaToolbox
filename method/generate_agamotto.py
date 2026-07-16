@@ -365,6 +365,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="pcfg-row"><b>__AGT_init_ea_lbl__</b><div id="pcIea"></div></div>
       <div class="pcfg-row"><b>__AGT_init_ed_lbl__</b><div id="pcIed"></div></div>
       <div class="pcfg-row"><b>__AGT_init_stack__</b><div id="pcStk"></div></div>
+      <div class="pcfg-row"><b>__AGT_last_attr__</b>
+        <select id="pcLa"></select>
+        <span class="afnote">__AGT_last_attr_note__</span>
+      </div>
       <div class="note">__AGT_pcfg_note__</div>
       <div class="note">__AGT_stack_note__</div>
     </div>
@@ -477,7 +481,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     return {code:'', deck:[], charm:[0,0,0,0,0,0], adx:[0,1,1,1,1,1],
             theme:[false,false,false,false,false,false], cost:0,
             ib:[0,0,0,0], iea:[0,0,0,0,0,0], ied:[0,0,0,0,0,0],
-            sk:[-1,-1,-1], sn:[1,1,1]};
+            sk:[-1,-1,-1], sn:[1,1,1], la:0};
   }
   var STK_NAME=['Mt','An','Et','Ba'];
   var STK_LABEL=['__DBT_stack_mt__','__DBT_stack_an__','__DBT_stack_et__','__DBT_stack_ba__'];
@@ -597,6 +601,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       sk+='</select></label> ';
     }
     document.getElementById('pcStk').innerHTML=sk;
+    // last-used card attribute (EH/SD condition seed): none = first card never triggers them
+    var la='<option value="0">__DBT_none__</option>';
+    for(var a3=1;a3<=5;a3++) la+='<option value="'+a3+'">'+esc(ATTR[a3-1])+'</option>';
+    document.getElementById('pcLa').innerHTML=la;
   })();
   function pcShow(key){
     pcCur=key;
@@ -618,6 +626,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('pcSk'+s2).value=c.sk[s2];
       document.getElementById('pcSn'+s2).value=c.sn[s2];
     }
+    document.getElementById('pcLa').value=c.la;
     var st=document.getElementById('deckStat');
     if(c.deck.length){ st.textContent=c.deck.length+'__AGT_deck_loaded__'; st.className='deckstat'; }
     else { st.textContent='__AGT_deck_none__'; st.className='deckstat none'; }
@@ -639,6 +648,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       c.sk[s2]=+document.getElementById('pcSk'+s2).value;
       c.sn[s2]=clamp(Math.floor(+document.getElementById('pcSn'+s2).value)||1,1,3);
     }
+    c.la=clamp(Math.floor(+document.getElementById('pcLa').value)||0,0,5);
   }
   document.getElementById('pcPick').addEventListener('change', function(){ pcShow(this.value); rebuildCardSel(); });
   document.getElementById('deckLoad').addEventListener('click', function(){
@@ -931,7 +941,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var st={};
     PKEYS.forEach(function(k){
       var cfg=PC[k];
-      var ps={hp:P[k].hp, dead:false, last:0,
+      var ps={hp:P[k].hp, dead:false, last:cfg.la||0,
               b:{pa:clamp(cfg.ib[0],-70,100)/100, ma:clamp(cfg.ib[1],-70,100)/100,
                  pd:clamp(cfg.ib[2],-70,100)/100, md:clamp(cfg.ib[3],-70,100)/100},
               ea:[0,0,0,0,0,0], ed:[0,0,0,0,0,0], stk:[]};
@@ -1351,10 +1361,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       if(c.code||c.cost||c.charm.some(function(x){return x;})||c.theme.some(function(x){return x;})
          ||c.adx.some(function(x,i){return i>0&&x!==1;})
          ||c.ib.some(function(x){return x;})||c.iea.some(function(x){return x;})
-         ||c.ied.some(function(x){return x;})||c.sk.some(function(x){return x>=0;}))
+         ||c.ied.some(function(x){return x;})||c.sk.some(function(x){return x>=0;})||c.la)
         pc[k]={code:c.code, charm:c.charm.slice(1), adx:c.adx.slice(1),
                theme:c.theme.slice(1).map(function(x){return x?1:0;}), cost:c.cost,
-               ib:c.ib, iea:c.iea.slice(1), ied:c.ied.slice(1), sk:c.sk, sn:c.sn};
+               ib:c.ib, iea:c.iea.slice(1), ied:c.ied.slice(1), sk:c.sk, sn:c.sn, la:c.la};
     });
     return {v:2, p:p, pc:pc, acts:acts.map(function(a){ return [a.actor,a.k]; }),
             ord:sideOrd, dis:[sideDis('A')?1:0, sideDis('E')?1:0],
@@ -1384,6 +1394,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           n.sk[s2]=(pcc.sk&&typeof pcc.sk[s2]==='number'&&pcc.sk[s2]>=0&&pcc.sk[s2]<=3)?pcc.sk[s2]:-1;
           n.sn[s2]=clamp(Math.floor((pcc.sn&&pcc.sn[s2])||1),1,3);
         }
+        n.la=clamp(Math.floor(pcc.la||0),0,5);
         n.cost=pcc.cost||0;
       }
       PC[k]=n;
