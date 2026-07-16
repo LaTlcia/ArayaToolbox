@@ -339,7 +339,7 @@
       "help_dmg": "Damage = floor( max(1, (TotalAtk − 2/3×TotalDef) × DamageMag × (1 + 0.05×min(floor(TotalAtk/TotalDef),10))) × Rand(0.9,1.0) + RandInt(1,200) ). If the target holds a Ba stack the damage is ×0.7 and one stack is consumed. TotalAtk/TotalDef use buffed stats plus the matching elemental atk/def.",
       "help_buff": "Buff/debuff amount = floor(BuffMag × caster's base stats), converted to the target's buff% and passed through decay: buffs decay 50% in +50%~+75% and 90% in +75%~+100% (cap +100%); debuffs decay 50% in −25%~−50% and 90% in −50%~−70% (floor −70%); elemental buffs never decay, range ±50%. Elemental BaseStats = (ATK+Sp.ATK)/2 or (DEF+Sp.DEF)/2.",
       "help_heal": "Heal = floor(HealMag × caster's (DEF+Sp.DEF)/2). Heals can revive dead allies (capped at max HP); buffs carried by the heal card apply normally.",
-      "help_marks": "Mt: next attack ×1.2; An: next buff/debuff ×1.3; Et: next heal ×1.3; Ba: next damage taken ×0.7. One stack is consumed per trigger (Ba per hit taken).",
+      "help_marks": "Mt: next attack ×1.2 (applies to every target of that attack card); An: next buff/debuff ×1.3; Et: next heal ×1.3; Ba: next hit taken ×0.7 (protects only the holder, consumed per hit taken). Max 3 kinds × 3 layers per player; gaining a 4th kind replaces the earliest-acquired one. A card triggering several effect types consumes one layer of each at once (damage + defense break uses Mt and An). Grants follow the skill text (self vs targets; target grants scale with target count and Range+1, never granted to enemies).",
       "help_death": "Dead players cannot act and cannot be targeted by buffs, debuffs or damage; only heals can target and revive them. When a dead player's turn comes: with auto-revive ON they revive at 30% HP, otherwise the action is skipped. The battle ends the moment one side's front row is wiped.",
       "help_target": "Damage/debuffs pick random living enemy front-row targets; heals/buffs pick random ally front-row targets (heals may include the dead). Target count is uniform between min~max; Range+1 adds one with the given probability (cap 4). Within one card the damage resolves first, then debuffs/buffs (it never benefits from its own defense break, but later allies do).",
       "help_flow": "An action = pick an actor and one card. Damage/debuffs hit the enemy front row, heals/buffs the ally front row (attack cards self-heal / self-buff only). Multipliers reuse the deck builder pipeline (CHARM/ADX/theme/specialty/orders).",
@@ -363,7 +363,15 @@
       "ko_flag": "Range+1",
       "buff_lbl": "Buff",
       "debuff_lbl": "Debuff",
-      "err_no_card": "Select a card first"
+      "err_no_card": "Select a card first",
+      "init_buff_lbl": "Initial buff% (base)",
+      "init_ea_lbl": "Initial elem ATK buff%",
+      "init_ed_lbl": "Initial elem DEF buff%",
+      "init_stack": "Initial stacks (acquisition order)",
+      "stack_note": "Stack rules: each player holds at most 3 kinds, 3 layers each. Gaining a 4th kind replaces the earliest-acquired one (slot 1 is oldest). A trigger consumes 1 layer: damage = Mt, buff/debuff = An, heal = Et (one card can consume several kinds at once); Ba is consumed per hit taken and reduces only the hit received by its holder.",
+      "mk_self": "self",
+      "mk_allies": "allies ",
+      "mk_targets": "targets"
     }
   }
 }

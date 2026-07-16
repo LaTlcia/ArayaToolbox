@@ -16,6 +16,7 @@ OUTPUT_DIR = os.path.join(PROJECT_ROOT, "output")   # generated *.html go here
 CARD_LIST_OUT = os.path.join(OUTPUT_DIR, "card_list.html")
 TACTICS_LIST_OUT = os.path.join(OUTPUT_DIR, "tactics_list.html")
 DECK_BUILDER_OUT = os.path.join(OUTPUT_DIR, "deck_builder.html")
+AGAMOTTO_OUT = os.path.join(OUTPUT_DIR, "agamotto.html")
 
 # ===========================================================================
 # Page language:  "cn" | "jp" | "en"   (files: ./language/<code>.json)

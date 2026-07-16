@@ -13,6 +13,7 @@ import assets_sync
 import generate_card_list
 import generate_deck_builder
 import generate_tactics_list
+import generate_agamotto
 
 
 def main():
@@ -36,6 +37,8 @@ def main():
     generate_deck_builder.main()
     print("\n=== build tactics list ===")
     generate_tactics_list.main()
+    print("\n=== build agamotto ===")
+    generate_agamotto.main()
     print("\nAll done.")
 
 
