@@ -177,6 +177,23 @@
       transition-duration: 80ms;
     }
 
+    /* Secret entrance: invisible until the cursor finds it (keyboard focus works too) */
+    .nav-card.secret {
+      opacity: 0;
+      transition:
+        opacity 450ms cubic-bezier(0.16, 1, 0.3, 1),
+        background var(--transition),
+        border-color var(--transition),
+        transform var(--transition),
+        box-shadow var(--transition);
+    }
+    .nav-card.secret:hover,
+    .nav-card.secret:focus-visible { opacity: 1; }
+    /* No hover on touch devices: keep it findable as a faint ghost */
+    @media (hover: none) {
+      .nav-card.secret { opacity: 0.25; }
+    }
+
     .card-icon {
       width: 40px;
       height: 40px;
@@ -409,6 +426,27 @@
         </div>
         <div class="card-text">
           <div class="card-label">Order Wiki</div>
+        </div>
+        <svg class="card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M5 12h14M13 6l6 6-6 6"/>
+        </svg>
+      </a>
+
+      <!-- Hidden 4th entrance: reveals itself only to those who seek it -->
+      <a href="output/agamotto.html" class="nav-card secret">
+        <div class="card-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <circle cx="12" cy="12" r="3.5"/>
+            <line x1="12" y1="3" x2="12" y2="5.5"/>
+            <line x1="12" y1="18.5" x2="12" y2="21"/>
+            <line x1="3" y1="12" x2="5.5" y2="12"/>
+            <line x1="18.5" y1="12" x2="21" y2="12"/>
+          </svg>
+        </div>
+        <div class="card-text">
+          <div class="card-label">Agamotto</div>
+          <div class="card-desc">-Insight-</div>
         </div>
         <svg class="card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M5 12h14M13 6l6 6-6 6"/>
