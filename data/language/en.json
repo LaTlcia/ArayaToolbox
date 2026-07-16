@@ -371,7 +371,9 @@
       "stack_note": "Stack rules: each player holds at most 3 kinds, 3 layers each. Gaining a 4th kind replaces the earliest-acquired one (slot 1 is oldest). A trigger consumes 1 layer: damage = Mt, buff/debuff = An, heal = Et (one card can consume several kinds at once); Ba is consumed per hit taken and reduces only the hit received by its holder.",
       "mk_self": "self",
       "mk_allies": "allies ",
-      "mk_targets": "targets"
+      "mk_targets": "targets",
+      "last_attr": "Previous card attribute",
+      "last_attr_note": "Seeds the EH/SD condition: the first action triggers them when its card attribute differs from this. With none, the first action never triggers them."
     }
   }
 }
