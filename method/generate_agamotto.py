@@ -403,6 +403,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
         <div class="pv" id="cardPv">__AGT_pv_none__</div>
       </div>
+      <div class="af-row"><b>__AGT_lock_lbl__</b>
+        <label>__AGT_lock_enemy__ <select id="aLockE"></select></label>
+        <label>__AGT_lock_ally__ <select id="aLockF"></select></label>
+        <span class="afnote">__AGT_lock_note__</span>
+      </div>
       <div class="af-row">
         <button class="btn primary" id="actAdd" type="button">__AGT_add_btn__</button>
         <button class="btn hideme" id="actCancel" type="button">__AGT_cancel_btn__</button>
@@ -495,12 +500,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       [['F',4],['B',5]].forEach(function(rw){
         h+='<h4>'+rowLbl(rw[0])+'</h4><table class="ptbl"><thead><tr><th>__AGT_pos_lbl__</th>'
           +'<th>'+esc(STAT.pa)+'</th><th>'+esc(STAT.ma)+'</th><th>'+esc(STAT.pd)+'</th><th>'+esc(STAT.md)+'</th>'
-          +'<th>__AGT_hp_max__</th><th>__AGT_deck_col__</th></tr></thead><tbody>';
+          +'<th>__AGT_hp_max__</th><th>__AGT_hp_cur__</th><th>__AGT_deck_col__</th></tr></thead><tbody>';
         for(var i=1;i<=rw[1];i++){
           var key=s+rw[0]+i;
           h+='<tr'+(rw[0]==='B'?' class="dim"':'')+'><td>'+i+'</td>';
-          ['pa','ma','pd','md','hp'].forEach(function(f){
-            h+='<td><input id="p_'+key+'_'+f+'" type="number" value="0" min="0" step="1"></td>';
+          ['pa','ma','pd','md','hp','ch'].forEach(function(f){
+            h+='<td><input id="p_'+key+'_'+f+'" type="number" value="0" min="0" step="1"'+(f==='ch'?' placeholder="=MAX"':'')+'></td>';
           });
           h+='<td class="dk" id="dk_'+key+'">—</td></tr>';
         }
@@ -513,7 +518,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var P={};
     PKEYS.forEach(function(k){
       P[k]={pa:num('p_'+k+'_pa'), ma:num('p_'+k+'_ma'), pd:num('p_'+k+'_pd'),
-            md:num('p_'+k+'_md'), hp:num('p_'+k+'_hp')};
+            md:num('p_'+k+'_md'), hp:num('p_'+k+'_hp'), ch:num('p_'+k+'_ch')};
     });
     return P;
   }
@@ -714,6 +719,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var h='';
     PKEYS.forEach(function(k){ h+='<option value="'+k+'">'+esc(actorLbl(k))+'</option>'; });
     document.getElementById('aActor').innerHTML=h;
+    var lo='<option value="0">__DBT_none__</option>';
+    for(var i=1;i<=4;i++) lo+='<option value="'+i+'">'+esc(LBL.rowF)+i+'</option>';
+    document.getElementById('aLockE').innerHTML=lo;
+    document.getElementById('aLockF').innerHTML=lo;
   })();
   function cardOptLabel(c){
     return ATTR[c.a-1]+' | '+c.n+' | '+TYPE_LABEL[c.c];
@@ -781,7 +790,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   document.getElementById('actAdd').addEventListener('click', function(){
     var k=document.getElementById('cardSel').value;
     if(!byKey[k]){ alert('__AGT_err_no_card__'); return; }
-    var a={actor:document.getElementById('aActor').value, k:k};
+    var a={actor:document.getElementById('aActor').value, k:k,
+           le:+document.getElementById('aLockE').value||0,
+           lf:+document.getElementById('aLockF').value||0};
     if(editIdx>=0 && editIdx<acts.length) acts[editIdx]=a; else acts.push(a);
     setEdit(-1); saveCfg();
   });
@@ -808,6 +819,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         +'<span class="who '+(a.actor.charAt(0)==='A'?'sA':'sE')+'">'+esc(actorShort(a.actor))+'</span>'
         +'<img class="mi" loading="lazy" src="'+iconUrl(c.uid)+'" alt="">'
         +actKinds(a)
+        +((a.le||a.lf)?'<span title="__AGT_lock_lbl__">🔒</span>':'')
         +'<span class="ab dup" title="⧉">⧉</span><span class="ab del" title="__DBT_remove__">×</span></div>';
     });
     box.innerHTML=h;
@@ -820,7 +832,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       setEdit(editIdx); saveCfg(); return;
     }
     if(e.target.classList.contains('dup')){
-      acts.push({actor:acts[i].actor, k:acts[i].k}); renderTL(); saveCfg(); return;
+      acts.push({actor:acts[i].actor, k:acts[i].k, le:acts[i].le||0, lf:acts[i].lf||0});
+      renderTL(); saveCfg(); return;
     }
     // load into the form for editing
     document.getElementById('aActor').value=acts[i].actor;
@@ -830,6 +843,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('poolAll').checked=true; rebuildCardSel();
       document.getElementById('cardSel').value=acts[i].k;
     }
+    document.getElementById('aLockE').value=acts[i].le||0;
+    document.getElementById('aLockF').value=acts[i].lf||0;
     renderPreview();
     setEdit(i);
   });
@@ -876,6 +891,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       h+='<div><span class="bk k-'+e.k+'">'+esc(e.l)+'</span> ×'+fmtNum(e.m)+'</div>';
     });
     h+='<div>'+esc(cardMeta(c))+'</div>';
+    if(a.le||a.lf){
+      var lk=[];
+      if(a.le) lk.push('__AGT_lock_enemy__ '+LBL.rowF+a.le);
+      if(a.lf) lk.push('__AGT_lock_ally__ '+LBL.rowF+a.lf);
+      h+='<div>🔒 '+esc(lk.join(' / '))+'</div>';
+    }
     if(!PC[a.actor].deck.length) h+='<div style="color:#f2b3b3">__AGT_deck_none__</div>';
     return h;
   }
@@ -941,7 +962,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var st={};
     PKEYS.forEach(function(k){
       var cfg=PC[k];
-      var ps={hp:P[k].hp, dead:false, last:cfg.la||0,
+      var ps={hp:(P[k].ch>0?Math.min(P[k].ch,P[k].hp):P[k].hp), dead:false, last:cfg.la||0,
               b:{pa:clamp(cfg.ib[0],-70,100)/100, ma:clamp(cfg.ib[1],-70,100)/100,
                  pd:clamp(cfg.ib[2],-70,100)/100, md:clamp(cfg.ib[3],-70,100)/100},
               ea:[0,0,0,0,0,0], ed:[0,0,0,0,0,0], stk:[]};
@@ -998,7 +1019,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var cfg=PC[key], side=key.charAt(0), opp=side==='A'?'E':'A';
     var own=ordInfo(side), other=ordInfo(opp);
     var rateUp=own?(own.rateUp||0)/100:0, rateDown=other?(other.rateDown||0)/100:0;
-    var up=[], leg=[], koNo=1, hasKo=false;
+    var up=[], leg=[], crit=[], koNo=1, hasKo=false;
     cfg.deck.forEach(function(k){
       var cc=byKey[k]; if(!cc) return;
       var c=cc.calc;
@@ -1014,8 +1035,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         koNo*=(1-r2);
       }
       (c.lu||[]).forEach(function(l){ leg.push(l); });
+      (c.lc||[]).forEach(function(l){ crit.push(l); });
     });
-    return {up:up, koP:hasKo?(1-koNo):0, leg:leg};
+    return {up:up, koP:hasKo?(1-koNo):0, leg:leg, crit:crit};
   }
 
   // deterministic per-line pre-compute for one action (everything not rolled/stateful)
@@ -1045,6 +1067,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var disadv=(dis && own)?(own.disadv||0)/100:0;
     var ctM=(dis && c.ct>0)?c.ct:1;
     var ehVal=c.eh>0?c.eh:1;
+    // crit rate: 5% base + matching legendary クリ率UP (card attr / dmg / atk type)
+    var dmgT=0;
+    c.e.forEach(function(e){ if(e.k==='dmg'&&!dmgT) dmgT=e.t; });
+    var critR=0.05;
+    der.crit.forEach(function(l){ if(l.a===c.a&&l.k==='dmg'&&(l.t===0||l.t===dmgT)) critR+=l.p; });
+    if(critR>1) critR=1;
     var lines=[];
     var hasDmg=false, hasHeal=false, hasBuff=false, hasDebuff=false;
     c.e.forEach(function(e){
@@ -1066,8 +1094,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       lines.push({k:e.k, t:e.t, s:e.s, det:det});
     });
     return {actor:a.actor, side:side, opp:opp, card:card, c:c, lines:lines,
-            up:der.up, koP:der.koP, leg:der.leg, ehVal:ehVal,
+            up:der.up, koP:der.koP, leg:der.leg, ehVal:ehVal, critR:critR,
             hasDmg:hasDmg, hasHeal:hasHeal, hasBuff:hasBuff, hasDebuff:hasDebuff,
+            lockE:(a.le>0)?(opp+'F'+a.le):null,
+            lockF:(a.lf>0)?(side+'F'+a.lf):null,
             tgtAlly:(c.c===5||c.c===7)};
   }
 
@@ -1080,17 +1110,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     return s;
   }
 
-  function pickTargets(P,st,side,n,withDead){
+  // lockKey: guaranteed pick when it is validly inside the pool (dead lock target
+  // still only counts for heal picks, because only those pools include the dead);
+  // the remaining n-1 slots are drawn randomly from the rest.
+  function pickTargets(P,st,side,n,withDead,lockKey){
     var pool=[], ks=frontKeys(side);
     for(var i=0;i<4;i++){ var k=ks[i];
       if(present(P,k) && (withDead||!st[k].dead)) pool.push(k); }
     if(!pool.length) return pool;
     if(n>pool.length) n=pool.length;
+    var out=[];
+    if(lockKey){
+      var li=pool.indexOf(lockKey);
+      if(li>=0){ pool.splice(li,1); out.push(lockKey); n--; }
+    }
     for(var s=0;s<n;s++){
       var r=s+Math.floor(Math.random()*(pool.length-s));
       var tmp=pool[s]; pool[s]=pool[r]; pool[r]=tmp;
     }
-    return pool.slice(0,n);
+    return out.concat(pool.slice(0,n));
   }
 
   function execAction(P,st,pa,autoRev){
@@ -1119,10 +1157,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     var n=lo+(hi>lo?Math.floor(Math.random()*(hi-lo+1)):0);
     var koProc=false;
     if(pa.koP>0 && Math.random()<pa.koP){ koProc=true; n=Math.min(4,n+1); }
-    // target groups
+    // target groups (locks prioritize their target inside the valid pool)
     var enemyT=null, allyT=null;
-    function enemies(){ if(enemyT===null) enemyT=pickTargets(P,st,pa.opp,n,false); return enemyT; }
-    function allies(){ if(allyT===null) allyT=pickTargets(P,st,pa.side,n,pa.hasHeal); return allyT; }
+    function enemies(){ if(enemyT===null) enemyT=pickTargets(P,st,pa.opp,n,false,pa.lockE); return enemyT; }
+    function allies(){ if(allyT===null) allyT=pickTargets(P,st,pa.side,n,pa.hasHeal,pa.lockF); return allyT; }
     // stack consumption: each trigger kind consumes 1 layer simultaneously
     // (a damage + debuff card consumes 1 Mt AND 1 An when held)
     var mtM=1, etM=1, anM=1;
@@ -1131,6 +1169,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     if((pa.hasBuff||pa.hasDebuff) && stackConsume(a,1)) anM=1.3;
 
     // 1) damage first (never benefits from this card's own debuffs)
+    // crit: rolled once per action (5% + legendary クリ率UP), independent ×1.3 region
+    var critM=(pa.hasDmg && Math.random()<pa.critR)?1.3:1;
     for(var li=0;li<pa.lines.length;li++){
       var e=pa.lines[li];
       if(e.k!=='dmg') continue;
@@ -1143,7 +1183,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         var ratio=Math.floor(TA/TD); if(ratio>10) ratio=10;
         var core=(TA-(2/3)*TD)*mag*(1+0.05*ratio);
         if(core<1) core=1;
-        var dmg=core*(0.9+Math.random()*0.1)+(1+Math.floor(Math.random()*200));
+        var dmg=(core*(0.9+Math.random()*0.1)+(1+Math.floor(Math.random()*200)))*critM;
         // Ba protects only its holder: consumed per hit RECEIVED, one layer each
         if(stackConsume(st[k2],3)) dmg*=0.7;
         dmg=Math.floor(dmg);
@@ -1194,9 +1234,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       else if(mg[1]>0){
         var n2=mg[1]+(mg[2]>mg[1]?Math.floor(Math.random()*(mg[2]-mg[1]+1)):0);
         if(koProc) n2=Math.min(4,n2+1);
-        rcv=pickTargets(P,st,pa.side,n2,false);
+        rcv=pickTargets(P,st,pa.side,n2,false,pa.lockF);
       } else {
-        rcv=pa.tgtAlly?allies():pickTargets(P,st,pa.side,n,false);
+        rcv=pa.tgtAlly?allies():pickTargets(P,st,pa.side,n,false,pa.lockF);
       }
       for(var r2=0;r2<rcv.length;r2++){
         var k5=rcv[r2];
@@ -1356,7 +1396,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   function collectCfg(){
     var p={}, pc={};
     PKEYS.forEach(function(k){
-      p[k]=[num('p_'+k+'_pa'),num('p_'+k+'_ma'),num('p_'+k+'_pd'),num('p_'+k+'_md'),num('p_'+k+'_hp')];
+      p[k]=[num('p_'+k+'_pa'),num('p_'+k+'_ma'),num('p_'+k+'_pd'),num('p_'+k+'_md'),num('p_'+k+'_hp'),num('p_'+k+'_ch')];
       var c=PC[k];
       if(c.code||c.cost||c.charm.some(function(x){return x;})||c.theme.some(function(x){return x;})
          ||c.adx.some(function(x,i){return i>0&&x!==1;})
@@ -1366,15 +1406,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                theme:c.theme.slice(1).map(function(x){return x?1:0;}), cost:c.cost,
                ib:c.ib, iea:c.iea.slice(1), ied:c.ied.slice(1), sk:c.sk, sn:c.sn, la:c.la};
     });
-    return {v:2, p:p, pc:pc, acts:acts.map(function(a){ return [a.actor,a.k]; }),
+    return {v:2, p:p, pc:pc, acts:acts.map(function(a){ return [a.actor,a.k,a.le||0,a.lf||0]; }),
             ord:sideOrd, dis:[sideDis('A')?1:0, sideDis('E')?1:0],
             tr:Math.floor(num('trials')), ar:document.getElementById('autoRev').checked};
   }
   function applyCfg(c){
     if(!c || c.v!==2) return false;
     PKEYS.forEach(function(k){
-      var row=(c.p&&c.p[k])||[0,0,0,0,0];
-      ['pa','ma','pd','md','hp'].forEach(function(f,i){
+      var row=(c.p&&c.p[k])||[0,0,0,0,0,0];
+      ['pa','ma','pd','md','hp','ch'].forEach(function(f,i){
         document.getElementById('p_'+k+'_'+f).value=row[i]||0;
       });
       var pcc=(c.pc&&c.pc[k]);
@@ -1399,7 +1439,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       }
       PC[k]=n;
     });
-    acts=(c.acts||[]).map(function(x){ return {actor:x[0], k:x[1]}; })
+    acts=(c.acts||[]).map(function(x){
+        return {actor:x[0], k:x[1], le:clamp(Math.floor(x[2]||0),0,4), lf:clamp(Math.floor(x[3]||0),0,4)}; })
       .filter(function(a){ return PKEYS.indexOf(a.actor)>=0 && byKey[a.k]; });
     sideOrd={A:null,E:null};
     if(c.ord){

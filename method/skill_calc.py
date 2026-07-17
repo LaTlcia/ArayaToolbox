@@ -195,6 +195,31 @@ def legendary_up(leg):
     return out
 
 
+# クリ率UP: 「さらにクリティカル発動確率を2.5%アップさせる」 — additive to the 5% base
+# crit rate, condition scope = the main sentence's attributes / card kind.
+_RE_LEG_CRIT = re.compile(r"クリティカル発動確率[をが]([0-9.]+)%アップ")
+
+
+def legendary_crit(leg):
+    """[{attr, kind, atk, pct}] crit-rate additions of a [レギオンマッチ] Legendary skill."""
+    if not leg:
+        return []
+    name, desc = _name(leg), _desc(leg)
+    if "レギオンマッチ" not in name and "レギオンマッチ" not in desc:
+        return []
+    mc = _RE_LEG_CRIT.search(desc)
+    if not mc:
+        return []
+    pct = _num(mc.group(1)) / 100.0
+    out = []
+    for m in _RE_LEG.finditer(desc):
+        kind, atk = _LEG_KIND[m.group(2)]
+        for ch in m.group(1).split("/"):
+            if ch in _ATTR_CH:
+                out.append({"attr": _ATTR_CH[ch], "kind": kind, "atk": atk, "pct": pct})
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Tactics gvg-effect -> calc data (for the active-tactics pickers)
 # ---------------------------------------------------------------------------
