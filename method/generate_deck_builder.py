@@ -341,6 +341,8 @@ def build_calc(e, gvg, ga):
         "pp": sc.passive_plus(ga),
         "lu": [{"a": l["attr"], "k": l["kind"], "t": l["atk"], "p": l["pct"]}
                for l in sc.legendary_up(e["skills"].get("legendary"))],
+        "lc": [{"a": l["attr"], "k": l["kind"], "t": l["atk"], "p": l["pct"]}
+               for l in sc.legendary_crit(e["skills"].get("legendary"))],
     }
 
 
@@ -1621,12 +1623,19 @@ __OTH_UNITS__
     });
     var P=hasKo?(1-koNo):0;
 
-    // deck-aggregate UP pools (every deck card's passive + Legendary)
-    var passPool=[], legPool=[];
+    // deck-aggregate UP pools (every deck card's passive + Legendary + crit-rate)
+    var passPool=[], legPool=[], critPool=[];
     deck.forEach(function(c){ if(!c.calc) return;
       (c.calc.pu||[]).forEach(function(p){ passPool.push({k:p.k,coeff:p.c,host:c.calc.a,plus:c.calc.pp||0}); });
       (c.calc.lu||[]).forEach(function(l){ legPool.push(l); });
+      (c.calc.lc||[]).forEach(function(l){ critPool.push(l); });
     });
+    // crit rate for a damage line = 5% base + matching legendary クリ率UP (additive)
+    function critRate(at, atk){
+      var s=0.05;
+      critPool.forEach(function(l){ if(l.a===at&&l.k==='dmg'&&(l.t===0||l.t===atk)) s+=l.p; });
+      return Math.min(1, s);
+    }
     function passUP(kind, detail){
       // The 支援UP passive boosts BOTH 支援(buff) and 妨害(debuff) effect lines
       // (incl. buff changes carried by damage / heal cards), so debuff draws the buff pool.
@@ -1708,10 +1717,14 @@ __OTH_UNITS__
             var ratio=Math.min(10, Math.floor(TotalAtk/TotalDef));
             var core=(TotalAtk-(2/3)*TotalDef)*dmgMagVal*(1+0.05*ratio);
             core=Math.max(1, core);
+            // crit: 独立乗算区 ×1.3, rate = 5% + Legendary クリ率UP (加算)
+            var crate=critRate(at, e.t);
             var c1=core*0.9+1, c2=core*1.0+1, c3=core*0.9+200, c4=core*1.0+200;
-            vlo=Math.min(c1,c2,c3,c4); vhi=Math.max(c1,c2,c3,c4); vex=core*0.95+100.5;
+            vlo=Math.min(c1,c2,c3,c4);
+            vhi=Math.max(c1,c2,c3,c4)*1.3;
+            vex=(core*0.95+100.5)*(1+0.3*crate);
             showExpFinal=true;
-            panelInfo={dmg:true, totalAtk:TotalAtk, totalDef:TotalDef, ratio:ratio, dmgMag:dmgMagVal};
+            panelInfo={dmg:true, totalAtk:TotalAtk, totalDef:TotalDef, ratio:ratio, dmgMag:dmgMagVal, crate:crate};
           } else if((e.k==='buff'||e.k==='debuff') && e.s){
             var buffMagVal=vex;
             var BaseStats=getBaseStat('dpA', e.s);
@@ -1858,6 +1871,7 @@ __OTH_UNITS__
       rows+='<tr><td class="bn">__DBT_total_def_label__</td><td class="bv">'+fmtNum(p.totalDef)+'</td><td class="bd">__DBT_atk_base_stat__ / __DBT_elem_def_buff__</td></tr>';
       rows+='<tr><td class="bn">floor(TotalAtk/TotalDef)</td><td class="bv">'+p.ratio+'</td><td class="bd">min( . . . ,10)</td></tr>';
       rows+='<tr><td class="bn">DamageMag</td><td class="bv">'+fmtNum(p.dmgMag)+'</td><td class="bd">__DBT_sim_mode_rate__</td></tr>';
+      if(p.crate!=null) rows+='<tr><td class="bn">Crit</td><td class="bv">'+(p.crate*100).toFixed(1)+'%</td><td class="bd">5% + Legendary クリ率UP → ×1.3</td></tr>';
       rows+='<tr><td class="bn">__DBT_dmg_range_label__</td><td class="bv" colspan="2">__DBT_dmg_min_label__ '+Math.floor(bd.flo)+' / __DBT_dmg_max_label__ '+Math.floor(bd.fhi)+' / __DBT_dmg_avg_label__ '+Math.floor(bd.fex)+'</td></tr>';
     } else if(bd.panel && !bd.panel.dmg){
       var p2=bd.panel;
