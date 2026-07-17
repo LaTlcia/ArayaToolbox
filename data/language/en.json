@@ -373,7 +373,13 @@
       "mk_allies": "allies ",
       "mk_targets": "targets",
       "last_attr": "Previous card attribute",
-      "last_attr_note": "Seeds the EH/SD condition: the first action triggers them when its card attribute differs from this. With none, the first action never triggers them."
+      "last_attr_note": "Seeds the EH/SD condition: the first action triggers them when its card attribute differs from this. With none, the first action never triggers them.",
+      "lock_lbl": "Target lock",
+      "lock_enemy": "Enemy lock",
+      "lock_ally": "Ally lock",
+      "lock_note": "A locked target is always picked when it is validly inside the pool; remaining slots stay random. Invalid locks (debuff on an ally, dead target for non-heal actions) are ignored.",
+      "hp_cur": "Current HP",
+      "hp_cur_note": "HP at start; 0 = same as max"
     }
   }
 }
