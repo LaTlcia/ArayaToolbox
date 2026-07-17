@@ -401,3 +401,6 @@ FodyWeavers.xsd
 *.claude
 
 __pycache__
+# Lacrymira (private tool, not published)
+method/Lacrymira.py
+output/Lacrymira.html
