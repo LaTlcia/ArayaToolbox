@@ -68,6 +68,15 @@ ULT_TYPE_FIELDS = {
     4: ("awakenedAddMaxMagicalDefense", "awakenedAddMagicalDefense"),
 }
 
+LBB_BONUS_STATS = {
+    1: (1,), 2: (2,), 3: (3,), 4: (4,),
+    5: (1, 2),          # ATK + DEF
+    6: (3, 4),          # Sp.ATK + Sp.DEF
+    7: (1, 3),          # ATK + Sp.ATK
+    8: (2, 4),          # DEF + Sp.DEF
+    9: (1, 2, 3, 4),
+}
+
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -114,18 +123,15 @@ def build_lookups():
 # Stat computation
 # ---------------------------------------------------------------------------
 def lbb_bonus(lbb_entry, t, awakened):
-    """Sum of bonuses with type==t in a limit-break bonus entry (base or awakenedAdd)."""
     if not lbb_entry:
         return 0
+    tkey = "awakenedAddBonusType%d" if awakened else "bonusType%d"
+    vkey = "awakenedAddBonusValue%d" if awakened else "bonusValue%d"
     total = 0
-    if awakened:
-        for i in (1, 2, 3, 4):
-            if lbb_entry.get("awakenedAddBonusType%d" % i) == t:
-                total += lbb_entry.get("awakenedAddBonusValue%d" % i, 0)
-    else:
-        for i in (1, 2, 3, 4):
-            if lbb_entry.get("bonusType%d" % i) == t:
-                total += lbb_entry.get("bonusValue%d" % i, 0)
+    for i in (1, 2, 3, 4):
+        stats = LBB_BONUS_STATS.get(lbb_entry.get(tkey % i))
+        if stats and t in stats:
+            total += lbb_entry.get(vkey % i, 0)
     return total
 
 
