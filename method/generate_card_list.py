@@ -208,12 +208,12 @@ _RE_BA = re.compile(r"次の被ダメージ時に被ダメージを[0-9.]+%ダ�
 _RE_CT = re.compile(r"劣勢時は効果が[0-9.]+倍になる")
 _RE_ET = re.compile(r"次の回復時に回復効果が[0-9.]+%アップするスタック")  # Et: self's next heal amount up
 _RE_COND = re.compile(r"異なる場合、([^。]*)")           # consequence clause of the different-attribute condition
-_RE_EH = re.compile(r"スキル効果が[0-9.]+倍に")
+_RE_EH = re.compile(r"スキル効果が[0-9.]+倍")
 _RE_MN = re.compile(r"MP消費を(?:大幅に)?抑え")
-
+_RE_SD = re.compile(r"効果対象範囲が最大")
 
 def target_letter(name):
-    """The letter before the trailing roman numeral in a skill name (target count A-G)."""
+    """The letter before the trailing roman numeral in a skill name (target count A-J)."""
     m = re.search(r"([A-Z])\s*" + _ROMAN + r"+\+?\s*$", name or "")
     return m.group(1) if m else ""
 
@@ -277,10 +277,13 @@ def skill_feature_codes(sk):
         cons = m.group(1)
         if _RE_EH.search(cons):
             codes.add("EH")
-        if "効果対象範囲が最大に" in cons:
+#        if "効果対象範囲が最大に" in cons:
+#            codes.add("SD")
+        if _RE_SD.search(cons):
             codes.add("SD")
         if _RE_MN.search(cons):
             codes.add("MN")
+            
     codes |= stat_flags(desc)
     return codes
 
