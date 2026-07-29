@@ -404,3 +404,6 @@ __pycache__
 # Lacrymira (private tool, not published)
 method/Lacrymira.py
 output/Lacrymira.html
+
+# Official-CDN direct downloader (private fallback, not published)
+method/direct_download.py

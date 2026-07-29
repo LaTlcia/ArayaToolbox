@@ -39,6 +39,12 @@ import concurrent.futures
 
 import config
 
+
+try:
+    import direct_download as _direct
+except Exception:
+    _direct = None
+
 # Source / location settings come from config.py; names below are local aliases.
 REMOTE_BASE = config.ASSETS_REMOTE_BASE
 UPDATE_DIR = config.ASSETS_UPDATE_DIR
@@ -122,16 +128,25 @@ def _download_one(rel, overwrite):
     dst = _local_path(rel)
     if not overwrite and _exists_ok(rel):
         return "skip", rel
+    via_direct = False
     try:
         data = _http_get(REMOTE_BASE + rel)
     except Exception as e:                       # noqa: BLE001
-        return "fail", "%s : %s" % (rel, e)
+        if _direct is None or not _direct.available():
+            return "fail", "%s : %s" % (rel, e)
+        try:
+            data = _direct.fetch(rel)
+            via_direct = True
+        except Exception as e2:
+            return "fail", "%s : mirror(%s) / direct(%s)" % (rel, e, e2)
+    if not data:
+        return "fail", "%s : empty" % rel
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     tmp = dst + ".part"
     with open(tmp, "wb") as f:
         f.write(data)
     os.replace(tmp, dst)
-    return "ok", rel
+    return ("ok_direct" if via_direct else "ok"), rel
 
 
 def _download_many(rels, overwrite, label, workers=config.DOWNLOAD_WORKERS):
@@ -139,20 +154,23 @@ def _download_many(rels, overwrite, label, workers=config.DOWNLOAD_WORKERS):
     total = len(rels)
     if not total:
         return 0, 0
-    ok = fail = 0
+    ok = fail = direct = 0
     done = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
         futs = [ex.submit(_download_one, r, overwrite) for r in rels]
         for fu in concurrent.futures.as_completed(futs):
             status, info = fu.result()
             done += 1
-            if status == "ok":
+            if status in ("ok", "ok_direct"):
                 ok += 1
+                if status == "ok_direct":
+                    direct += 1
             elif status == "fail":
                 fail += 1
                 print("    ! failed:", info)
             if done % 100 == 0 or done == total:
-                print("    %s %d/%d (ok %d / failed %d)" % (label, done, total, ok, fail))
+                extra = (" / via official CDN %d" % direct) if direct else ""
+                print("    %s %d/%d (ok %d / failed %d%s)" % (label, done, total, ok, fail, extra))
     return ok, fail
 
 
